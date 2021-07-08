@@ -38,6 +38,30 @@
 	(logand #xFF (ash n -8))
 	(logand #xFF n)))
 
+(defun modified-utf8 (character)
+  "Encodes a character as a list of modified UTF-8 bytes.
+Assumes char-code returns the Unicode code point.
+See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
+  (let ((code (char-code character)))
+    (assert (<= 0 code #x10FFFF))
+    (cond
+      ((<= 1 code #x7F)
+       (list code))
+      ((or (zerop code) (<= code #x7FF))
+       (list (logior #b11000000 (ash code -6))
+	     (logior #b10000000 (logand #x3F code))))
+      ((<= code #xFFFF)
+       (list (logior #b11100000 (ash code -12))
+	     (logior #b10000000 (logand #x3F (ash code -6)))
+	     (logior #b10000000 (logand #x3F code))))
+      (t
+       (list #b11101101
+	     (logior #xb1010000 (1- (ash code -16)))
+	     (logior #xb1000000 (logand #x3F (ash code -10)))
+	     #b11101101
+	     (logior #xb1011000 (logand #x0F (ash code -6)))
+	     (logior #xb1000000 (logand #x3F code)))))))
+
 (defun access-modifiers (mod-list mod-map)
   (let ((flags (mapcar (lambda (x) (second (assoc x mod-map)))
 		       mod-list)))
@@ -174,10 +198,10 @@
 	     (list ,tag ,@body)))))))
 
 (def-jconstant utf8-info 1 (text)
-  (u2 (length text))
-  ;; todo: add support for UTF-8, which Java does
-  ;; note the special encoding for u+0000, which is #xC080
-  (map 'list #'char-code text))
+  (let ((text-bytes (loop for char across text
+			  appending (modified-utf8 char))))
+    (list (u2 (length text-bytes))
+	  text-bytes)))
 
 (def-jconstant integer-info 3 (value)
   (u4 value))
@@ -250,7 +274,7 @@
 	 (flet ((u2-pool-index (const)
 		  (u2 (pool-index ,pool const)))
 		(constant-pool () ,pool)
-		(substructs (sub-list)
+		(substructs (sublist)
 		  ;;Inserts a list of structures into the outer structure
 		  (mapcar (lambda (f) (byte-list f ,pool))
 			  sublist)))
@@ -329,7 +353,8 @@
 
 (defun java-class-bytes (java-class)
   (let* ((pool (make-constant-pool))
-	 (bytes (byte-list pool java-class)))
+	 (bytes (flatten (byte-list pool java-class)
+			 :remove-nil t)))
     (flatten (list
 	      (u4 #xCAFEBABE)		; magic number
 	      (subseq bytes 0 4)	; class version

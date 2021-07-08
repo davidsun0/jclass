@@ -3,6 +3,15 @@
 jclass makes it easy to build Java class files in Common Lisp, making it easy
 to develop low level code for the JVM.
 
+## Portability
+
+jclass should work conforming Common Lisps with the following features:
+
+- Unicode support requires that CHAR-CODE return the Unicode code point
+
+Incompatibility with an implementation that has these features should be
+considered a bug. Please report any issues.
+
 ## Current Status
 
 jclass is in its early stages of development. The API is unlikely to change
