@@ -13,7 +13,8 @@
 (defun parse-bytes (count bytes)
   (with-slots (array index) bytes
     (if (< (- (length array) index) count)
-	(error 'class-format-error)
+	(error 'class-format-error
+	       :message "Unexpected end of byte stream")
 	(prog1
 	  (make-array count
 		      :displaced-to array
@@ -38,56 +39,78 @@
 	    (aref u4-bytes 3))))
 
 (defun decode-modified-utf8 (bytes)
-  (flet ((extract-bits (mask shift byte)
-	   (assert (= mask (ash byte (- shift)))
-		   (byte) "~A ~A ~A" mask shift byte)
-	   (logand (1- (ash 1 shift)) byte)))
-    (let ((input (coerce bytes 'list)))
-      (loop while input
-	    collect
-	    (code-char
-	     (let ((code (pop input)))
-	       (cond
-		 ((zerop (ash code -7)) code)
-		 ((= (ash code -5) #b110)
-		  (logior (ash (extract-bits #b110 5 code) 6)
-			  (extract-bits #b10 6 (pop input))))
-		 ((= code #b11101101)
-		  (logior (ash (1+ (extract-bits #b1010 4 (pop input))) 16)
-			  (ash (extract-bits #b10 6 (pop input)) 10)
-			  (* 0 (pop input))
-			  (ash (extract-bits #b1011 4 (pop input)) 6)
-			  (extract-bits #b10 6 (pop input))))
-		 ((= (ash code -4) #b1110)
-		  (logior (ash (extract-bits #b1110 4 code) 12)
-			  (ash (extract-bits #b10 6 (pop input)) 6)
-			  (extract-bits #b10 6 (pop input))))
-		 (t (error 'class-format-error :message "Invalid modified UTF-8 sequence")))))))))
+  (let ((input (coerce bytes 'list))
+	(output '()))
+    (labels ((extract-bits (mask shift byte)
+	       (assert (= mask (ash byte (- shift))) (byte)
+		       'class-format-error
+		       :message (format nil "Invalid UTF-8 byte ~A" byte))
+	       (logand (1- (ash 1 shift)) byte))
+	     (decode-utf8 ()
+	       (let ((byte (pop input)))
+		 (cond
+		   ((and (zerop (ash byte -7))
+			 (not (zerop byte)))
+		    byte)
+		   ((= (ash byte -5) #b110)
+		    (logior (ash (extract-bits #b110 5 byte) 6)
+			    (extract-bits #b10 6 (pop input))))
+		   ((= (ash byte -4) #b1110)
+		    (logior (ash (extract-bits #b1110 4 byte) 12)
+			    (ash (extract-bits #b10 6 (pop input)) 6)
+			    (extract-bits #b10 6 (pop input))))
+		   (t (error 'class-format-error
+			     :message (format nil "Invalid modified UTF-8 sequence ~A"
+					      bytes)))))))
+      (loop while input do
+	(push
+	 (let ((code-point (decode-utf8)))
+	   (cond
+	     ((or (< code-point #xD800) (<= #xE000 code-point))
+	      (code-char code-point))
+	     ((<= #xD800 code-point #xDBFF)
+	      ;; decode UTF-16 surrogate pair
+	      (let ((upper code-point)
+		    (lower (decode-utf8)))
+		(assert (<= #xDC00 lower #xDFFF) (lower)
+			'class-format-error
+			:message (format nil "Invalid surrogate pair ~A ~A" upper lower))
+		(code-char (+ #x10000
+			      (logior (ash (- upper #xD800) 10)
+				      (- lower #xDC00))))))
+	     (t (error 'class-format-error
+		       :message (format nil "Invalid modified UTF-8 sequence ~A"
+					bytes)))))
+	 output))
+      (coerce output 'string))))
 
 (defun allocate-constant (bytes)
+  ;; first pass over constant pool: split into entries
   (let ((tag (parse-u1 bytes)))
-    (cons tag
-	  (case tag
-	    ((1)
-	     (let ((length (parse-u2 bytes)))
-	       (list (parse-bytes length bytes))))
-	    ((3 4)
-	     (list (parse-u4 bytes)))
-	    ((5 6)
-	     (list (logior (ash (parse-u4 bytes) 32)
-			   (parse-u4 bytes))))
-	    ((7 8 16 19 20)
-	     (list (parse-u2 bytes)))
-	    ((9 10 11 12 17 18)
-	     (list (parse-u2 bytes)
-		   (parse-u2 bytes)))
-	    ((15)
-	     (list (parse-u1 bytes)
-		   (parse-u2 bytes)))
-	    (t (error 'class-format-error
-		      :message (format nil "Unknown tag ~A in constant pool" tag)))))))
+    (cons
+     tag
+     (case tag
+       ((1)
+	(let ((length (parse-u2 bytes)))
+	  (list (parse-bytes length bytes))))
+       ((3 4)
+	(list (parse-u4 bytes)))
+       ((5 6)
+	(list (logior (ash (parse-u4 bytes) 32)
+		      (parse-u4 bytes))))
+       ((7 8 16 19 20)
+	(list (parse-u2 bytes)))
+       ((9 10 11 12 17 18)
+	(list (parse-u2 bytes)
+	      (parse-u2 bytes)))
+       ((15)
+	(list (parse-u1 bytes)
+	      (parse-u2 bytes)))
+       (t (error 'class-format-error
+		 :message (format nil "Unknown tag ~A in constant pool" tag)))))))
 
 (defun build-constant (pool index)
+  ;; second pass over constant pool: build constants and resolve dependencies
   (let* ((constant (aref pool index))
 	 (tag (first constant)))
     (if (symbolp tag) ; already built constants begin with symbols
@@ -166,7 +189,8 @@
   (let ((cbytes (make-class-bytes :array byte-array :index 0)))
     ;; magic number
     (when (/= (parse-u4 cbytes) #xCAFEBABE)
-      (error 'class-format-error :message "File is not a Java class file"))
+      (error 'class-format-error
+	     :message "File is not a Java class file - magic number CAFEBABE not found"))
     ;; minor, major versions
     (print (parse-u2 cbytes))
     (print (parse-u2 cbytes))
