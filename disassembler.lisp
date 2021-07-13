@@ -187,11 +187,6 @@
 (defparameter *attribute-parsers*
   (make-hash-table :test 'equal))
 
-(defmacro def-attribute-parser (attribute-name lambda-list &body body)
-  `(setf (gethash attribute-name *attribute-parsers)
-	 (lambda ,lambda-list
-	   ,@body)))
-
 (defun parse-attribute (bytes pool-array)
   (let* ((name-index (parse-u2 bytes))
 	 (name (aref pool-array name-index))
