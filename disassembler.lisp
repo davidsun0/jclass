@@ -187,6 +187,11 @@
 (defparameter *attribute-parsers*
   (make-hash-table :test 'equal))
 
+(defmacro def-attribute-parser (attribute-name lambda-list &body body)
+  `(setf (gethash attribute-name *attribute-parsers)
+	 (lambda ,lambda-list
+	   ,@body)))
+
 (defun parse-attribute (bytes pool-array)
   (let* ((name-index (parse-u2 bytes))
 	 (name (aref pool-array name-index))
@@ -206,7 +211,7 @@
 		 pool-array)
       (ignore-attribute ()
 	:report "Use the raw byte array of the attribute"
-	body))))
+	(list (utf8-info-text name) body)))))
 
 (defun access-flag-lookup (mod-list flags)
   ;; see #'access-modifiers
@@ -226,6 +231,18 @@
      (loop repeat attribute-count
 	   collect (parse-attribute bytes pool-array)))))
 
+(defun parse-method (bytes pool-array)
+  (let ((flags            (parse-u2 bytes))
+	(name-index       (parse-u2 bytes))
+	(descriptor-index (parse-u2 bytes))
+	(attribute-count  (parse-u2 bytes)))
+    (make-method-info
+     (access-flag-lookup *method-modifiers* flags)
+     (utf8-info-text (aref pool-array name-index))
+     (utf8-info-text (aref pool-array descriptor-index))
+     (loop repeat attribute-count
+	   collect (parse-attribute bytes pool-array)))))
+
 (defun disassemble-class (byte-array)
   (let* ((cbytes (make-class-bytes :array byte-array :index 0))
 	 ;; magic number
@@ -234,29 +251,35 @@
 	     (error 'class-format-error
 		    :message
 		    "File is not a Java class file: magic number CAFEBABE not found")))
-	 (minor-version (parse-u2 cbytes))
-	 (major-version (parse-u2 cbytes))
-	 (pool-array    (parse-constant-pool cbytes))
-	 (access-flags  (access-flag-lookup *class-modifiers* (parse-u2 cbytes)))
-	 (this-class    (class-info-name (aref pool-array (parse-u2 cbytes))))
-	 (parent-class  (class-info-name (aref pool-array (parse-u2 cbytes))))
+	 (minor-version   (parse-u2 cbytes))
+	 (major-version   (parse-u2 cbytes))
+	 (pool-array      (parse-constant-pool cbytes))
+	 (access-flags    (parse-u2 cbytes))
+	 (this-class      (class-info-name (aref pool-array (parse-u2 cbytes))))
+	 (parent-class    (class-info-name (aref pool-array (parse-u2 cbytes))))
 	 (interface-count (parse-u2 cbytes))
-	 (interfaces    (loop repeat interface-count
+	 (interfaces      (loop repeat interface-count
 			      collect (aref pool-array (parse-u2 cbytes))))
-	 (field-count   (parse-u2 cbytes))
-	 (fields        (loop repeat field-count
-			      collect (parse-field cbytes pool-array))))
+	 (field-count     (parse-u2 cbytes))
+	 (fields          (loop repeat field-count
+			      collect (parse-field cbytes pool-array)))
+	 (method-count    (parse-u2 cbytes))
+	 (methods         (loop repeat method-count
+			      collect (parse-method cbytes pool-array)))
+	 (attribute-count (parse-u2 cbytes))
+	 (attributes      (loop repeat attribute-count
+				collect (parse-attribute cbytes pool-array))))
     (declare (ignore magic))
     (make-java-class
      major-version
      minor-version
-     access-flags
+     (access-flag-lookup *class-modifiers* access-flags)
      this-class
      parent-class
      interfaces
      fields
-     '()
-     '())))
+     methods
+     attributes)))
 
 (defun disassemble-file (path)
   (with-open-file (stream path
