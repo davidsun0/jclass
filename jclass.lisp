@@ -38,7 +38,7 @@
 	(logand #xFF (ash n -8))
 	(logand #xFF n)))
 
-(defun modified-utf8 (character)
+(defun encode-modified-utf8 (character)
   "Encodes a character as a list of modified UTF-8 bytes.
 Assumes char-code returns the Unicode code point.
 See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
@@ -56,11 +56,31 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 	     (logior #b10000000 (logand #x3F code))))
       (t
        (list #b11101101
-	     (logior #xb1010000 (1- (ash code -16)))
-	     (logior #xb1000000 (logand #x3F (ash code -10)))
+	     (logior #b10100000 (1- (ash code -16)))
+	     (logior #b10000000 (logand #x3F (ash code -10)))
 	     #b11101101
-	     (logior #xb1011000 (logand #x0F (ash code -6)))
-	     (logior #xb1000000 (logand #x3F code)))))))
+	     (logior #b10110000 (logand #x0F (ash code -6)))
+	     (logior #b10000000 (logand #x3F code)))))))
+
+(defun encode-modified-utf8 (char)
+  (labels ((encode-code-point (code)
+	     (cond
+	       ((< 0 code #x80) (list code))
+	       ((< code #x800)
+		(list (logior #b11000000 (ash code -6))
+		      (logior #b10000000 (logand #x3F code))))
+	       ((< code #x10000)
+		(list (logior #b11100000 (ash code -12))
+		      (logior #b10000000 (logand #x3F (ash code -6)))
+		      (logior #b10000000 (logand #x3F code))))
+	       (t
+		(let* ((code (- code #x10000))
+		       (upper (ash code -10))
+		       (lower (logand code #x3FF)))
+		  (concatenate 'list
+			       (encode-code-point upper)
+			       (encode-code-point lower)))))))
+    (encode-code-point (char-code char))))
 
 (defun access-modifiers (mod-list mod-map)
   (let ((flags (mapcar (lambda (x) (second (assoc x mod-map)))
@@ -209,7 +229,7 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 (def-jconstant float-info 4 (ieee-bits)
   (u4 ieee-bits))
 
-;; the fact that long-info and double-info take two slots is described in pool-index
+;; pool-index implements long-info and double-info taking two pool slots
 (def-jconstant long-info 5 (value)
   (u4 (ash value -32))
   (u4 value))
