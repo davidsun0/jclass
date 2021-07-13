@@ -118,10 +118,9 @@
 	(setf
 	 (aref pool index)
 	 (case tag
-	   ((1)
-	    (make-utf8-info (map 'string #'code-char (second constant))))
+	   ((1) (make-utf8-info    (decode-modified-utf8 (second constant))))
 	   ((3) (make-integer-info (second constant)))
-	   ((4) (make-float-info (second constant)))
+	   ((4) (make-float-info   (second constant)))
 	   ((5 6)
 	    (destructuring-bind (high-bytes low-bytes) (rest constant)
 	      (let ((value (logior (ash high-bytes 32) low-bytes)))
@@ -133,11 +132,11 @@
 		   (utf8-constant (build-constant pool utf8-index))
 		   (text (utf8-info-text utf8-constant)))
 	      (case tag
-		((7)  (make-class-info text))
-		((8)  (make-string-info text))
+		((7)  (make-class-info       text))
+		((8)  (make-string-info      text))
 		((16) (make-method-type-info text))
-		((19) (make-module-info text))
-		((20) (make-package-info text)))))
+		((19) (make-module-info      text))
+		((20) (make-package-info     text)))))
 	   ((9 10 11)
 	    (destructuring-bind (class-index name-type-index) (rest constant)
 	      (let* ((class-constant (build-constant pool class-index))
@@ -146,8 +145,8 @@
 		     (name (name-and-type-info-name name-type))
 		     (type (name-and-type-info-type name-type)))
 		(case tag
-		  ((9) (make-field-ref-info class-name name type))
-		  ((10) (make-method-ref-info class-name name type))
+		  ((9)  (make-field-ref-info            class-name name type))
+		  ((10) (make-method-ref-info           class-name name type))
 		  ((11) (make-interface-method-ref-info class-name name type))))))
 	   ((12)
 	    (destructuring-bind (name-index type-index) (rest constant)
@@ -164,7 +163,7 @@
 		     (name (name-and-type-info-name name-type))
 		     (type (name-and-type-info-type name-type)))
 		(if (= tag 17)
-		    (make-dynamic-info bootstrap-index name type)
+		    (make-dynamic-info        bootstrap-index name type)
 		    (make-invoke-dynamic-info bootstrap-index name type)))))
 	   (t constant))))))
 
@@ -185,22 +184,79 @@
 	  do (format t "~A: ~A~%" i (build-constant pool i)))
     pool))
 
+(defparameter *attribute-parsers*
+  (make-hash-table :test 'equal))
+
+(defun parse-attribute (bytes pool-array)
+  (let* ((name-index (parse-u2 bytes))
+	 (name (aref pool-array name-index))
+	 (length     (parse-u4 bytes))
+	 (body       (parse-bytes length bytes)))
+    (assert (utf8-info-p name) (name-index)
+	    'class-format-error
+	    :message "Attribute name is not a UTF-8 constant")
+    (restart-case
+	(funcall (gethash (utf8-info-text name) *attribute-parsers*
+			  (lambda (bytes pool-array)
+			    (declare (ignore bytes pool-array))
+			    (error 'class-format-error
+				   :message (format nil "Unknown attribute ~A"
+						    (utf8-info-text name)))))
+		 body
+		 pool-array)
+      (ignore-attribute ()
+	:report "Use the raw byte array of the attribute"
+	body))))
+
+(defun access-flag-lookup (mod-list flags)
+  ;; see #'access-modifiers
+  (loop for modifier in mod-list
+	when (not (zerop (logand (second modifier) flags)))
+	  collect (first modifier)))
+
+(defun parse-field (bytes pool-array)
+  (let ((flags            (parse-u2 bytes))
+	(name-index       (parse-u2 bytes))
+	(descriptor-index (parse-u2 bytes))
+	(attribute-count  (parse-u2 bytes)))
+    (make-field-info
+     (access-flag-lookup *field-modifiers* flags)
+     (utf8-info-text (aref pool-array name-index))
+     (utf8-info-text (aref pool-array descriptor-index))
+     (loop repeat attribute-count
+	   collect (parse-attribute bytes pool-array)))))
+
 (defun disassemble-class (byte-array)
-  (let ((cbytes (make-class-bytes :array byte-array :index 0)))
-    ;; magic number
-    (when (/= (parse-u4 cbytes) #xCAFEBABE)
-      (error 'class-format-error
-	     :message "File is not a Java class file - magic number CAFEBABE not found"))
-    ;; minor, major versions
-    (print (parse-u2 cbytes))
-    (print (parse-u2 cbytes))
-    ;; constant pool
-    (parse-constant-pool cbytes)
-    ;; fields
-    ;; methods
-    ;; attributes
-    ;; (print (class-bytes-index cbytes))
-    ))
+  (let* ((cbytes (make-class-bytes :array byte-array :index 0))
+	 ;; magic number
+	 (magic
+	   (when (/= (parse-u4 cbytes) #xCAFEBABE)
+	     (error 'class-format-error
+		    :message
+		    "File is not a Java class file: magic number CAFEBABE not found")))
+	 (minor-version (parse-u2 cbytes))
+	 (major-version (parse-u2 cbytes))
+	 (pool-array    (parse-constant-pool cbytes))
+	 (access-flags  (access-flag-lookup *class-modifiers* (parse-u2 cbytes)))
+	 (this-class    (class-info-name (aref pool-array (parse-u2 cbytes))))
+	 (parent-class  (class-info-name (aref pool-array (parse-u2 cbytes))))
+	 (interface-count (parse-u2 cbytes))
+	 (interfaces    (loop repeat interface-count
+			      collect (aref pool-array (parse-u2 cbytes))))
+	 (field-count   (parse-u2 cbytes))
+	 (fields        (loop repeat field-count
+			      collect (parse-field cbytes pool-array))))
+    (declare (ignore magic))
+    (make-java-class
+     major-version
+     minor-version
+     access-flags
+     this-class
+     parent-class
+     interfaces
+     fields
+     '()
+     '())))
 
 (defun disassemble-file (path)
   (with-open-file (stream path
