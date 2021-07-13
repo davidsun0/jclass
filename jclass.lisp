@@ -77,9 +77,10 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 		(let* ((code (- code #x10000))
 		       (upper (ash code -10))
 		       (lower (logand code #x3FF)))
+		  ;; encode as UTF-16 surrogate pair
 		  (concatenate 'list
-			       (encode-code-point upper)
-			       (encode-code-point lower)))))))
+			       (encode-code-point (+ #xD800 upper))
+			       (encode-code-point (+ #xDC00 lower))))))))
     (encode-code-point (char-code char))))
 
 (defun access-modifiers (mod-list mod-map)
