@@ -42,27 +42,6 @@
   "Encodes a character as a list of modified UTF-8 bytes.
 Assumes char-code returns the Unicode code point.
 See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
-  (let ((code (char-code character)))
-    (assert (<= 0 code #x10FFFF))
-    (cond
-      ((<= 1 code #x7F)
-       (list code))
-      ((or (zerop code) (<= code #x7FF))
-       (list (logior #b11000000 (ash code -6))
-	     (logior #b10000000 (logand #x3F code))))
-      ((<= code #xFFFF)
-       (list (logior #b11100000 (ash code -12))
-	     (logior #b10000000 (logand #x3F (ash code -6)))
-	     (logior #b10000000 (logand #x3F code))))
-      (t
-       (list #b11101101
-	     (logior #b10100000 (1- (ash code -16)))
-	     (logior #b10000000 (logand #x3F (ash code -10)))
-	     #b11101101
-	     (logior #b10110000 (logand #x0F (ash code -6)))
-	     (logior #b10000000 (logand #x3F code)))))))
-
-(defun encode-modified-utf8 (char)
   (labels ((encode-code-point (code)
 	     (cond
 	       ((< 0 code #x80) (list code))
@@ -81,7 +60,7 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 		  (concatenate 'list
 			       (encode-code-point (+ #xD800 upper))
 			       (encode-code-point (+ #xDC00 lower))))))))
-    (encode-code-point (char-code char))))
+    (encode-code-point (char-code character))))
 
 (defun access-modifiers (mod-list mod-map)
   (let ((flags (mapcar (lambda (x) (second (assoc x mod-map)))
@@ -219,8 +198,7 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 	     (list ,tag ,@body)))))))
 
 (def-jconstant utf8-info 1 (text)
-  (let ((text-bytes (loop for char across text
-			  appending (modified-utf8 char))))
+  (let ((text-bytes (flatten (map 'list #'encode-modified-utf8 text))))
     (list (u2 (length text-bytes))
 	  text-bytes)))
 
@@ -315,15 +293,15 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 
 ;;; Fields, Methods, and Classes
 
-(def-jstruct method-info (flags name descriptor attributes)
-  (u2 (access-modifiers flags *method-modifiers*))
+(def-jstruct field-info (flags name descriptor attributes)
+  (u2 (access-modifiers flags *field-modifiers*))
   (u2-pool-index (make-utf8-info name))
   (u2-pool-index (make-utf8-info descriptor))
   (u2 (length attributes))
   (substructs attributes))
 
-(def-jstruct field-info (flags name descriptor attributes)
-  (u2 (access-modifiers flags *field-modifiers*))
+(def-jstruct method-info (flags name descriptor attributes)
+  (u2 (access-modifiers flags *method-modifiers*))
   (u2-pool-index (make-utf8-info name))
   (u2-pool-index (make-utf8-info descriptor))
   (u2 (length attributes))
