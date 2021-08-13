@@ -22,6 +22,20 @@
 			   append (flatten-keep subtree)))))
 	(flatten-keep tree))))
 
+;;; Disassembly
+
+(define-condition class-format-error (error)
+  ((message :initarg :message
+	    :accessor message))
+  (:report (lambda (condition stream)
+	     (format stream "~A" (message condition)))))
+
+(defstruct class-bytes
+  array
+  index)
+
+;;; Byte manipulation
+
 (defun u1 (n)
   "Lists the bytes of a 1 byte integer."
   (list (logand #xFF n)))
@@ -37,6 +51,34 @@
 	(logand #xFF (ash n -16))
 	(logand #xFF (ash n -8))
 	(logand #xFF n)))
+
+(defun parse-bytes (count bytes)
+  (with-slots (array index) bytes
+    (if (< (- (length array) index) count)
+	(error 'class-format-error
+	       :message "Unexpected end of byte stream")
+	(prog1
+	  (make-array count
+		      :displaced-to array
+		      :displaced-index-offset index
+		      :element-type (array-element-type array)
+		      :fill-pointer count)
+	  (incf index count)))))
+
+(defun parse-u1 (bytes)
+  (aref (parse-bytes 1 bytes) 0))
+
+(defun parse-u2 (bytes)
+  (let ((u2-bytes (parse-bytes 2 bytes)))
+    (logior (ash (aref u2-bytes 0) 8)
+	    (aref u2-bytes 1))))
+
+(defun parse-u4 (bytes)
+  (let ((u4-bytes (parse-bytes 4 bytes)))
+    (logior (ash (aref u4-bytes 0) 24)
+	    (ash (aref u4-bytes 1) 16)
+	    (ash (aref u4-bytes 2) 8)
+	    (aref u4-bytes 3))))
 
 (defun encode-modified-utf8 (character)
   "Encodes a character as a list of modified UTF-8 bytes.
@@ -62,62 +104,62 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 			       (encode-code-point (+ #xDC00 lower))))))))
     (encode-code-point (char-code character))))
 
+(defun decode-modified-utf8 (bytes)
+  (let ((input (coerce bytes 'list))
+	(output '()))
+    (labels ((extract-bits (mask shift byte)
+	       (assert (= mask (ash byte (- shift))) (byte)
+		       'class-format-error
+		       :message (format nil "Invalid UTF-8 byte ~A" byte))
+	       (logand (1- (ash 1 shift)) byte))
+	     (decode-utf8 ()
+	       (let ((byte (pop input)))
+		 (cond
+		   ((and (zerop (ash byte -7))
+			 (not (zerop byte)))
+		    byte)
+		   ((= (ash byte -5) #b110)
+		    (logior (ash (extract-bits #b110 5 byte) 6)
+			    (extract-bits #b10 6 (pop input))))
+		   ((= (ash byte -4) #b1110)
+		    (logior (ash (extract-bits #b1110 4 byte) 12)
+			    (ash (extract-bits #b10 6 (pop input)) 6)
+			    (extract-bits #b10 6 (pop input))))
+		   (t (error 'class-format-error
+			     :message (format nil "Invalid modified UTF-8 sequence ~A"
+					      bytes)))))))
+      (loop while input do
+	(push
+	 (let ((code-point (decode-utf8)))
+	   (cond
+	     ((or (< code-point #xD800) (<= #xE000 code-point))
+	      (code-char code-point))
+	     ((<= #xD800 code-point #xDBFF)
+	      ;; decode UTF-16 surrogate pair
+	      (let ((upper code-point)
+		    (lower (decode-utf8)))
+		(assert (<= #xDC00 lower #xDFFF) (lower)
+			'class-format-error
+			:message (format nil "Invalid surrogate pair ~A ~A" upper lower))
+		(code-char (+ #x10000
+			      (logior (ash (- upper #xD800) 10)
+				      (- lower #xDC00))))))
+	     (t (error 'class-format-error
+		       :message (format nil "Invalid modified UTF-8 sequence ~A"
+					bytes)))))
+	 output))
+      (coerce output 'string))))
+
+;; See *class-modifiers*, *method-modifiers*, *field-modifiers*, etc.
 (defun access-modifiers (mod-list mod-map)
   (let ((flags (mapcar (lambda (x) (second (assoc x mod-map)))
 		       mod-list)))
     (reduce #'logior flags)))
 
-(defparameter *inner-class-modifiers*
-  '((:public       #x0001)
-    (:private      #x0002)
-    (:protected    #x0004)
-    (:static       #x0008)
-    (:final        #x0010)
-    (:interface    #x0200)
-    (:abstract     #x0400)
-    (:synthetic    #x1000)
-    (:annotation   #x2000)
-    (:enum         #x4000)))
-
-(defparameter *class-modifiers*
-  '((:public       #x0001)
-    (:final        #x0010)
-    (:super        #x0020)
-    (:interface    #x0200)
-    (:abstract     #x0400)
-    (:synthetic    #x1000)
-    (:annotation   #x2000)
-    (:enum         #x4000)
-    (:module       #x8000)))
-
-(defparameter *method-modifiers*
-  '((:public       #x0001)
-    (:private      #x0002)
-    (:protected    #x0004)
-    (:static       #x0008)
-    (:final        #x0010)
-    (:synchronized #x0020)
-    (:bridge       #x0040)
-    (:varargs      #x0080)
-    (:native       #x0100)
-    (:abstract     #x0400)
-    (:strict       #x0800)
-    (:synthetic    #x1000)))
-
-(defparameter *field-modifiers*
-  '((:public       #x0001)
-    (:private      #x0002)
-    (:protected    #x0004)
-    (:static       #x0008)
-    (:final        #x0010)
-    (:volatile     #x0040)
-    (:transient    #x0080)
-    (:synthetic    #x1000)
-    (:enum         #x4000)))
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun symbol-concatenate (&rest values)
-    (intern (format nil "~{~A~}" values))))
+(defun access-flag-lookup (mod-list flags)
+  (loop for modifier in mod-list
+	when (not (zerop (logand (second modifier) flags)))
+	  collect (first modifier)))
 
 ;;; Constant Pool
 
@@ -136,6 +178,8 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
   "Inserts a constant into a constant pool."
   (let ((index (gethash constant (constant-pool-table pool))))
     (cond
+      ;; optional constants use 0 to represent no constant
+      ((null constant) 0)
       (index)
       (insert
        ;; each constant maps to its index in the pool
@@ -260,78 +304,105 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 (def-jconstant package-info 20 (name)
   (u2-pool-index (make-utf8-info name)))
 
-(defgeneric byte-list (pool struct)
-  (:documentation "Constructs the binary form of a JVM structure."))
+;; Constatnt pool disassembly
 
-(defmacro def-jstruct (name slots &body body)
-  (let ((struct-obj (gensym))
-	(pool (gensym)))
-    `(progn
-       (defstruct (,name (:constructor ,(symbol-concatenate "MAKE-" name) ,slots))
-	 ,@slots)
-       (defmethod byte-list (,pool (,struct-obj ,name))
-	 (flet ((u2-pool-index (const)
-		  (u2 (pool-index ,pool const)))
-		(constant-pool () ,pool)
-		(substructs (sublist)
-		  ;;Inserts a list of structures into the outer structure
-		  (mapcar (lambda (f) (byte-list f ,pool))
-			  sublist)))
-	   (declare (ignorable (function u2-pool-index)
-			       (function constant-pool)
-			       (function substructs)))
-	   (with-slots ,slots ,struct-obj
-	     (list ,@body)))))))
+(defun allocate-constant (bytes)
+  ;; first pass over constant pool: split into entries
+  (let ((tag (parse-u1 bytes)))
+    (cons
+     tag
+     (case tag
+       ((1)
+	(let ((length (parse-u2 bytes)))
+	  (list (parse-bytes length bytes))))
+       ((3 4)
+	(list (parse-u4 bytes)))
+       ((5 6)
+	(list (logior (ash (parse-u4 bytes) 32)
+		      (parse-u4 bytes))))
+       ((7 8 16 19 20)
+	(list (parse-u2 bytes)))
+       ((9 10 11 12 17 18)
+	(list (parse-u2 bytes)
+	      (parse-u2 bytes)))
+       ((15)
+	(list (parse-u1 bytes)
+	      (parse-u2 bytes)))
+       (t (error 'class-format-error
+		 :message (format nil "Unknown tag ~A in constant pool" tag)))))))
 
-(defmacro inner-structs (name slots &body body)
-  "Defines an anonymous inner struct which is built by destructuring a list."
-  (let ((inner-form (gensym)))
-    `(mapcar (lambda (,inner-form)
-	       (destructuring-bind ,slots ,inner-form
-		 (list ,@body)))
-	     ,name)))
+(defun build-constant (pool index)
+  ;; second pass over constant pool: build constants and resolve dependencies
+  (let* ((constant (aref pool index))
+	 (tag (first constant)))
+    (if (symbolp tag) ; already built constants begin with symbols
+	constant
+	(setf
+	 (aref pool index)
+	 (case tag
+	   ((1) (make-utf8-info    (decode-modified-utf8 (second constant))))
+	   ((3) (make-integer-info (second constant)))
+	   ((4) (make-float-info   (second constant)))
+	   ((5 6)
+	    (destructuring-bind (high-bytes low-bytes) (rest constant)
+	      (let ((value (logior (ash high-bytes 32) low-bytes)))
+		(if (= tag 5)
+		    (make-long-info   value)
+		    (make-double-info value)))))
+	   ((7 8 16 19 20)
+	    (let* ((utf8-index (second constant))
+		   (utf8-constant (build-constant pool utf8-index))
+		   (text (utf8-info-text utf8-constant)))
+	      (case tag
+		((7)  (make-class-info       text))
+		((8)  (make-string-info      text))
+		((16) (make-method-type-info text))
+		((19) (make-module-info      text))
+		((20) (make-package-info     text)))))
+	   ((9 10 11)
+	    (destructuring-bind (class-index name-type-index) (rest constant)
+	      (let* ((class-constant (build-constant pool class-index))
+		     (class-name (class-info-name class-constant))
+		     (name-type (build-constant pool name-type-index))
+		     (name (name-and-type-info-name name-type))
+		     (type (name-and-type-info-type name-type)))
+		(case tag
+		  ((9)  (make-field-ref-info            class-name name type))
+		  ((10) (make-method-ref-info           class-name name type))
+		  ((11) (make-interface-method-ref-info class-name name type))))))
+	   ((12)
+	    (destructuring-bind (name-index type-index) (rest constant)
+	      (let ((name-utf8 (build-constant pool name-index))
+		    (type-utf8 (build-constant pool type-index)))
+		(make-name-and-type-info (utf8-info-text name-utf8)
+					 (utf8-info-text type-utf8)))))
+	   ((15)
+	    (destructuring-bind (kind reference) (rest constant)
+	      (make-method-handle-info kind (build-constant pool reference))))
+	   ((17 18)
+	    (destructuring-bind (bootstrap-index name-type-index) (rest constant)
+	      (let* ((name-type (build-constant pool name-type-index))
+		     (name (name-and-type-info-name name-type))
+		     (type (name-and-type-info-type name-type)))
+		(if (= tag 17)
+		    (make-dynamic-info        bootstrap-index name type)
+		    (make-invoke-dynamic-info bootstrap-index name type)))))
+	   (t constant))))))
 
-;;; Fields, Methods, and Classes
+(defun parse-constant-pool (bytes)
+  ;; constants are 1-indexed AND the size is 1 more than the actual count
+  (let* ((size (1- (parse-u2 bytes)))
+	 (pool (make-array (+ 2 size) :initial-element nil)))
+    (loop for i from 1 upto size do
+      (setf (aref pool i)
+	    (let* ((constant (allocate-constant bytes))
+		   (tag (first constant)))
+	      ;; increment if long or double
+	      (when (or (= tag 5) (= tag 6))
+		(incf i))
+	      constant)))
+    ;; parse dependencies
+    (loop for i from 1 upto size
+	  do (format t "~A: ~A~%" i (build-constant pool i)))
+    pool))
 
-(def-jstruct field-info (flags name descriptor attributes)
-  (u2 (access-modifiers flags *field-modifiers*))
-  (u2-pool-index (make-utf8-info name))
-  (u2-pool-index (make-utf8-info descriptor))
-  (u2 (length attributes))
-  (substructs attributes))
-
-(def-jstruct method-info (flags name descriptor attributes)
-  (u2 (access-modifiers flags *method-modifiers*))
-  (u2-pool-index (make-utf8-info name))
-  (u2-pool-index (make-utf8-info descriptor))
-  (u2 (length attributes))
-  (substructs attributes))
-
-(def-jstruct java-class
-    (major-version minor-version flags name parent interfaces fields methods attributes)
-  (u2 minor-version)
-  (u2 major-version)
-  (u2 (access-modifiers flags *class-modifiers*))
-  (u2-pool-index (make-class-info name))
-  (u2-pool-index (make-class-info parent))
-  (u2 (length interfaces))
-  (substructs interfaces)
-  (u2 (length fields))
-  (substructs fields)
-  (u2 (length methods))
-  (substructs methods)
-  (u2 (length attributes))
-  (substructs attributes))
-
-;; Java version
-
-(defun java-class-bytes (java-class)
-  (let* ((pool (make-constant-pool))
-	 (bytes (flatten (byte-list pool java-class)
-			 :remove-nil t)))
-    (flatten (list
-	      (u4 #xCAFEBABE)		; magic number
-	      (subseq bytes 0 4)	; class version
-	      (constant-pool-bytes pool)
-	      (subseq bytes 4))
-	     :remove-nil t)))
