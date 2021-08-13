@@ -22,6 +22,10 @@
 			   append (flatten-keep subtree)))))
 	(flatten-keep tree))))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun symbol-concatenate (&rest values)
+    (intern (format nil "~{~A~}" values))))
+
 ;;; Disassembly
 
 (define-condition class-format-error (error)

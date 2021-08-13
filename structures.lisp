@@ -1,11 +1,5 @@
 (in-package #:jclass)
 
-(defparameter *serializers*
-  (make-hash-table :test 'eq))
-
-(defparameter *deserializers*
-  (make-hash-table :test 'eq))
-
 (defmacro define-serializer (fn lambda-list &body body)
   (let ((argument (gensym)))
     `(setf (gethash ',fn *serializers*)
@@ -20,119 +14,131 @@
 	     (destructuring-bind ,lambda-list ,argument
 	       ,@body)))))
 
-(defun expand-serializer (form)
-  (let ((serial-fn (gethash (car form) *serializers*)))
-    (if serial-fn
-	(funcall serial-fn (cdr form))
-	(error "Can't find serializer for ~A" form))))
+(eval-when (:compile-toplevel :load-toplevel :execute)
 
-(defun expand-deserializer (form &rest args)
-  (let ((deserial-fn (gethash (car form) *deserializers*)))
-    (if deserial-fn
-	(apply deserial-fn (cdr form) args)
-	(error "Can't find deserializer for ~A: ~A" form args))))
+  (defparameter *serializers*
+    (make-hash-table :test 'eq))
 
-(define-serializer with-length (length list fields &rest body)
-  `(list
-    (,length (length ,list))
-    ,(let ((term (gensym)))
-       `(mapcar (lambda (,term)
+  (defparameter *deserializers*
+    (make-hash-table :test 'eq))
+
+  (defun expand-serializer (form)
+    (if (symbolp form)
+	form
+	(let ((serial-fn (gethash (car form) *serializers*)))
+	  (if serial-fn
+	      (funcall serial-fn (cdr form))
+	      (error "Can't find serializer for ~A" form)))))
+
+  (defun expand-deserializer (form &rest args)
+    (if (symbolp form)
+	(destructuring-bind (value) args
+	  `(setf ,form ,value))
+	(let ((deserial-fn (gethash (car form) *deserializers*)))
+	  (if deserial-fn
+	      (apply deserial-fn (cdr form) args)
+	      (error "Can't find deserializer for ~A: ~A" form args)))))
+
+  (define-serializer with-length (unit list fields &rest body)
+    (let ((term (gensym)))
+      `(list
+	(,unit (length ,list))
+	(mapcar (lambda (&rest ,term)
 		  (destructuring-bind ,fields ,term
 		    ,@(mapcar #'expand-serializer body)))
 		,list))))
 
-(define-deserializer with-length ((length list lambda-list &rest body) stream)
-  (let ((item-count (gensym)))
-    `(let ((,item-count ,(list (ccase length
-				 (u1 'parse-u1)
-				 (u2 'parse-u2)
-				 (u4 'parse-u4))
-			       stream)))
-       (setf ,list
-	     (loop repeat ,item-count
-		   collect
-		   (let ,lambda-list
-		     ,@(loop for form in body
-			     collect (expand-deserializer form stream))
-		     (list ,@lambda-list)))))))
+  (define-deserializer with-length ((unit list lambda-list &rest body) stream)
+    (let ((item-count (gensym)))
+      `(let ((,item-count ,(list (ccase unit
+				   (u1 'parse-u1)
+				   (u2 'parse-u2)
+				   (u4 'parse-u4))
+				 stream)))
+	 (setf ,list
+	       (loop repeat ,item-count
+		     collect
+		     (let ,lambda-list
+		       ,@(loop for form in body
+			       collect (expand-deserializer form stream))
+		       (list ,@lambda-list)))))))
 
-;;; Bytes
+  ;; Byte manipulation
 
-(define-serializer u1 (inner) `(u1 ,(expand-serializer inner)))
-(define-serializer u2 (inner) `(u2 ,(expand-serializer inner)))
-(define-serializer u4 (inner) `(u4 ,(expand-serializer inner)))
+  (define-serializer u1 (inner) `(u1 ,(expand-serializer inner)))
+  (define-serializer u2 (inner) `(u2 ,(expand-serializer inner)))
+  (define-serializer u4 (inner) `(u4 ,(expand-serializer inner)))
 
-(define-deserializer u1 ((inner) stream)
-  (expand-deserializer inner `(parse-u1 ,stream)))
-(define-deserializer u2 ((inner) stream)
-  (expand-deserializer inner `(parse-u2 ,stream)))
-(define-deserializer u4 ((inner) stream)
-  (expand-deserializer inner `(parse-u4 ,stream)))
+  (define-deserializer u1 ((inner) stream)
+    (expand-deserializer inner `(parse-u1 ,stream)))
+  (define-deserializer u2 ((inner) stream)
+    (expand-deserializer inner `(parse-u2 ,stream)))
+  (define-deserializer u4 ((inner) stream)
+    (expand-deserializer inner `(parse-u4 ,stream)))
 
-;;; Constant pool references
+  ;; Constant pool references
 
-(define-serializer utf8-info  (text) `(pool-index (make-utf8-info  ,text)))
-(define-serializer class-info (name) `(pool-index (make-class-info ,name)))
+  (define-serializer utf8-info  (text) `(pool-index (make-utf8-info  ,text)))
+  (define-serializer class-info (name) `(pool-index (make-class-info ,name)))
 
-(define-deserializer utf8-info ((place) argument)
-  `(setf ,place (utf8-info-text (aref pool-array ,argument))))
-(define-deserializer class-info ((place) argument)
-  `(setf ,place (class-info-name (aref pool-array ,argument))))
+  (define-deserializer utf8-info ((place) argument)
+    `(setf ,place (utf8-info-text (aref (pool-array) ,argument))))
+  
+  (define-deserializer class-info ((place) argument)
+    `(setf ,place (class-info-name (aref (pool-array) ,argument))))
 
-(define-serializer name-and-type-info (name type)
-  `(pool-index (make-name-and-type-info ,name ,type)))
+  (define-serializer name-and-type-info (name type)
+    `(pool-index (make-name-and-type-info ,name ,type)))
 
-(define-deserializer name-and-type-info ((name type) argument)
-  (let ((info-ref (gensym)))
-    `(let ((,info-ref (aref pool-array ,argument)))
-       (setf ,name (name-and-type-info-name ,info-ref))
-       (setf ,type (name-and-type-info-type ,info-ref)))))
+  (define-deserializer name-and-type-info ((name type) argument)
+    (let ((info-ref (gensym)))
+      `(let ((,info-ref (aref (pool-array) ,argument)))
+	 (setf ,name (name-and-type-info-name ,info-ref))
+	 (setf ,type (name-and-type-info-type ,info-ref)))))
 
-;;; Advanced
+  ;; Advanced
 
-(define-serializer access-modifiers (mod-list mod-map)
-  `(access-modifiers ,mod-list ,mod-map))
+  (define-serializer access-modifiers (mod-list mod-map)
+    `(access-modifiers ,mod-list ,mod-map))
 
-(define-deserializer access-modifiers ((place mod-map) bytes)
-  `(setf ,place (access-flag-lookup ,bytes ,mod-map)))
+  (define-deserializer access-modifiers ((place mod-map) bytes)
+    `(setf ,place (access-flag-lookup ,bytes ,mod-map)))
 
-(define-serializer raw-bytes (bytes)
-  `(coerce 'list ,bytes))
+  (define-serializer raw-bytes (bytes)
+    `(coerce 'list ,bytes))
 
-(define-deserializer raw-bytes ((place) stream)
-  `(setf ,place
-	 (with-slots (array index) ,stream
-	   (make-array (- (length array) index)
-		       :displaced-to array
-		       :displaced-index-offset index
-		       :element-type array))))
+  (define-deserializer raw-bytes ((place) stream)
+    (let ((rbytes (gensym)))
+      `(setf ,place
+	     (let ((,rbytes ,stream))
+	       (with-slots (array index) ,rbytes
+		 (parse-bytes (- (length array) index)
+			      ,rbytes))))))
 
-;; Pool index with unspecified type
+  ;; Pool index with unspecified type
 
-(define-serializer pool-index (constant)
-  `(pool-index (constant-pool) ,constant))
+  (define-serializer pool-index (constant)
+    `(pool-index (pool-array) ,constant))
 
-(define-deserializer pool-index ((place) index)
-  `(setf ,place (aref pool-array ,index)))
+  (define-deserializer pool-index ((place) index)
+    `(setf ,place (aref (pool-array) ,index)))
 
-;;; Structures
+  ;; Structures
 
-(define-serializer field    (field) `(byte-list ,field  (constant-pool)))
-(define-serializer method  (method) `(byte-list ,method (constant-pool)))
-(define-serializer attribute (attr) `(byte-list ,attr   (constant-pool)))
+  (define-serializer field         (field) `(byte-list ,field     (constant-pool)))
+  (define-serializer method       (method) `(byte-list ,method    (constant-pool)))
+  (define-serializer attribute      (attr) `(byte-list ,attr      (constant-pool)))
 
-(define-deserializer field ((field) stream)
-  `(setf ,field (parse-field ,stream (constant-pool))))
+  (define-deserializer field ((field) stream)
+    `(setf ,field (parse-field-info ,stream (pool-array))))
 
-(define-deserializer method ((method) stream)
-  `(setf ,method (parse-method ,stream (constant-pool))))
+  (define-deserializer method ((method) stream)
+    `(setf ,method (parse-method-info ,stream (pool-array))))
 
-(define-deserializer attribute ((attr) stream)
-  `(setf ,attr (parse-attribute ,stream (constant-pool))))
+  (define-deserializer attribute ((attr) stream)
+    `(setf ,attr (parse-attribute ,stream (pool-array))))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun symbol-concatenate (&rest values)
-    (intern (format nil "~{~A~}" values))))
+  ) ; end eval-when
 
 (defgeneric byte-list (pool struct)
   (:documentation "Constructs the binary form of a JVM structure."))
@@ -151,10 +157,76 @@
 	   (with-slots ,slots ,struct-obj
 	     (list ,@(mapcar #'expand-serializer body)))))
        (defun ,(symbol-concatenate 'parse- name) (,struct-obj ,pool)
-	 (let ,slots
-	   ,@(loop for form in body
-		   collect (expand-deserializer form struct-obj))
-	   (,(symbol-concatenate 'make- name) ,@slots))))))
+	 (flet ((pool-array () ,pool))
+	   (declare (ignorable (function pool-array)))
+	   (let ,slots
+	     ,@(loop for form in body
+		     collect (expand-deserializer form struct-obj))
+	     (,(symbol-concatenate 'make- name) ,@slots)))))))
+
+#|
+(defmacro def-attribute (name name-string slots &body body)
+  (let ((struct-obj (gensym))
+	(pool (gensym)))
+    `(progn
+       (defstruct (,name (:constructor ,(symbol-concatenate 'make- name) ,slots))
+	 ,@slots)
+
+       (defmethod byte-list (,pool (,struct-obj ,name))
+	 (flet ((constant-pool () ,pool)
+		(pool-index (constant) (pool-index ,pool constant)))
+	   (declare (ignorable (function constant-pool)
+			       (function pool-index)))
+	   (with-slots ,slots ,struct-obj
+	     (list
+	      (u2 (pool-index (make-utf8-info ,name-string)))
+	      ,@(mapcar #'expand-serializer body)))))
+
+       (setf (gethash ,name-string *attribute-parsers*)
+	     (lambda (,class-bytes ,pool-array)
+
+	       ))
+       (defun ,(symbol-concatenate 'parse- name) (,struct-obj ,pool)
+	 (flet ((pool-array () ,pool))
+	   (declare (ignorable (function pool-array)))
+	   (let ,slots
+	     ,@(loop for form in body
+		     collect (expand-deserializer form struct-obj))
+	     (,(symbol-concatenate 'make- name) ,@slots)))))))
+
+(defmacro def-attribute (name name-string slots &body body)
+  `(def-jstruct ,name ,slots
+     ;; all attributes have this structure: u2 name, u4 length, bytes
+     (u2-pool-index (make-utf8-info ,name-string))
+     (let ((body-bytes (flatten (list ,@body) :remove-nil t)))
+       (list (u4 (length body-bytes))
+	     body-bytes))))
+|#
+
+(defparameter *attribute-parsers*
+  (make-hash-table :test 'equal))
+
+(defun parse-attribute (bytes pool-array &rest arguments)
+  (let* ((name-index (parse-u2 bytes))
+	 (name       (aref pool-array name-index))
+	 (length     (parse-u4 bytes))
+	 (body       (parse-bytes length bytes)))
+    (assert (utf8-info-p name) (name-index)
+	    'class-format-error
+	    :message "Attribute name is not a UTF-8 constant")
+    (restart-case
+	(apply (gethash (utf8-info-text name) *attribute-parsers*
+			(lambda (bytes pool-array)
+			  (declare (ignore bytes pool-array))
+			  (error 'class-format-error
+				 :message (format nil "Unknown attribute ~A"
+						  (utf8-info-text name)))))
+	       (make-class-bytes :array body :index 0)
+	       pool-array
+	       arguments)
+      (ignore-attribute ()
+	:report "Use the raw attribute byte array"
+	(list (utf8-info-text name) body)))))
 
 (defparameter *field-modifiers*
   '((:public       #x0001)
@@ -208,13 +280,12 @@
 
 (def-jstruct java-class
     (minor-version major-version flags name parent interfaces fields methods attributes)
-  (u2 minor-version)
-  (u2 major-version)
+  ;; handle version number independently for easy constant pool manipulation
   (u2 (access-modifiers flags *class-modifiers*))
   (u2 (class-info name))
   (u2 (class-info parent))
   (with-length u2 interfaces (interface)
-    (interface interface))
+    (u2 (class-info interface)))
   (with-length u2 fields (field)
     (field field))
   (with-length u2 methods (method)
@@ -223,60 +294,30 @@
     (attribute attribute)))
 
 (defun java-class-bytes (java-class &optional (pool (make-constant-pool)))
-  (let ((bytes (flatten (byte-list pool java-class)
-			:remove-nil t)))
-    (flatten (list
-	      (u4 #xCAFEBABE)		; magic number
-	      (subseq bytes 0 4)	; class version
+  ;; resolve the constants first
+  (let ((bytes (byte-list pool java-class)))
+    (flatten (list*
+	      (u4 #xCAFEBABE) ; file magic number
+	      (u2 (java-class-minor-version java-class))
+	      (u2 (java-class-major-version java-class))
 	      (constant-pool-bytes pool)
-	      (subseq bytes 4))		; rest of the class
+	      bytes)
 	     :remove-nil t)))
 
-(defmacro def-attribute (name name-string slots &body body)
-  `(def-jstruct ,name ,slots
-     ;; all attributes have this structure: u2 name, u4 length, bytes
-     (u2-pool-index (make-utf8-info ,name-string))
-     (let ((body-bytes (flatten (list ,@body) :remove-nil t)))
-       (list (u4 (length body-bytes))
-	     body-bytes))))
-
-(defun disassemble-class (byte-array)
-  (let* ((cbytes (make-class-bytes :array byte-array :index 0))
-	 ;; magic number
-	 (magic
-	   (when (/= (parse-u4 cbytes) #xCAFEBABE)
-	     (error 'class-format-error
-		    :message
-		    "File is not a Java class file: magic number CAFEBABE not found")))
-	 (minor-version   (parse-u2 cbytes))
-	 (major-version   (parse-u2 cbytes))
-	 (pool-array      (parse-constant-pool cbytes))
-	 (access-flags    (parse-u2 cbytes))
-	 (this-class      (class-info-name (aref pool-array (parse-u2 cbytes))))
-	 (parent-class    (class-info-name (aref pool-array (parse-u2 cbytes))))
-	 (interface-count (parse-u2 cbytes))
-	 (interfaces      (loop repeat interface-count
-			      collect (aref pool-array (parse-u2 cbytes))))
-	 (field-count     (parse-u2 cbytes))
-	 (fields          (loop repeat field-count
-			      collect (parse-field cbytes pool-array)))
-	 (method-count    (parse-u2 cbytes))
-	 (methods         (loop repeat method-count
-			      collect (parse-method cbytes pool-array)))
-	 (attribute-count (parse-u2 cbytes))
-	 (attributes      (loop repeat attribute-count
-				collect (parse-attribute cbytes pool-array))))
+(defun disassemble-jclass (bytes)
+  (let* ((cbytes (make-class-bytes :array bytes :index 0))
+	 (magic  (when (/= (parse-u4 cbytes) #xCAFEBABE)
+		   (error 'class-format-error
+			  :message
+			  "Not a Java class file: missing magic number 0xCAFEBABE")))
+	 (minor-version (parse-u2 cbytes))
+	 (major-version (parse-u2 cbytes))
+	 (pool-array    (parse-constant-pool cbytes))
+	 (jclass        (parse-java-class cbytes pool-array)))
     (declare (ignore magic))
-    (make-java-class
-     major-version
-     minor-version
-     (access-flag-lookup *class-modifiers* access-flags)
-     this-class
-     parent-class
-     interfaces
-     fields
-     methods
-     attributes)))
+    (setf (java-class-minor-version jclass) minor-version)
+    (setf (java-class-major-version jclass) major-version)
+    jclass))
 
 (defun disassemble-file (path)
   (with-open-file (stream path
@@ -286,32 +327,9 @@
     (let* ((length (file-length stream))
 	   (buffer (make-array length :element-type '(unsigned-byte 8))))
       (read-sequence buffer stream)
-      (disassemble-class buffer))))
+      (disassemble-jclass buffer))))
 
-(defparameter *attribute-parsers*
-  (make-hash-table :test 'equal))
-
-(defun parse-attribute (bytes pool-array &rest arguments)
-  (let* ((name-index (parse-u2 bytes))
-	 (name (aref pool-array name-index))
-	 (length     (parse-u4 bytes))
-	 (body       (parse-bytes length bytes)))
-    (assert (utf8-info-p name) (name-index)
-	    'class-format-error
-	    :message "Attribute name is not a UTF-8 constant")
-    (restart-case
-	(apply (gethash (utf8-info-text name) *attribute-parsers*
-			(lambda (bytes pool-array)
-			  (declare (ignore bytes pool-array))
-			  (error 'class-format-error
-				 :message (format nil "Unknown attribute ~A"
-						  (utf8-info-text name)))))
-	       (make-class-bytes :array body :index 0)
-	       pool-array
-	       arguments)
-      (ignore-attribute ()
-	:report "Use the raw attribute byte array"
-	(list (utf8-info-text name) body)))))
+#|
 
 (def-attribute "ConstantValue" (value)
   (u2 (utf8-info value)))
@@ -520,3 +538,4 @@
 (def-attribute permitted-subclasses "PermittedSubclasses" (classes)
   (with-length u2 classes (class)
     (u2 (class-info class))))
+|#

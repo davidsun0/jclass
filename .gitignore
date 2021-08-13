@@ -1,2 +1,5 @@
 # compiled Lisp
 *.fasl
+
+# Java output
+*.class
