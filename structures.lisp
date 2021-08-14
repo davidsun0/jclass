@@ -1,14 +1,14 @@
 (in-package #:jclass)
 
 (defmacro define-serializer (fn lambda-list &body body)
-  (let ((argument (gensym)))
+  (with-gensyms (argument)
     `(setf (gethash ',fn *serializers*)
 	   (lambda (,argument)
 	     (destructuring-bind ,lambda-list ,argument
 	       ,@body)))))
 
 (defmacro define-deserializer (fn lambda-list &body body)
-  (let ((argument (gensym)))
+  (with-gensyms (argument)
     `(setf (gethash ',fn *deserializers*)
 	   (lambda (&rest ,argument)
 	     (destructuring-bind ,lambda-list ,argument
@@ -40,28 +40,27 @@
 	      (error "Can't find deserializer for ~A: ~A" form args)))))
 
   (define-serializer with-length (unit list fields &rest body)
-    (let ((term (gensym)))
+    (with-gensyms (term)
       `(list
 	(,unit (length ,list))
 	(mapcar (lambda (&rest ,term)
-		  (destructuring-bind ,fields ,term
-		    ,@(mapcar #'expand-serializer body)))
+		  (destructuring-bind (,fields) ,term
+		    (list ,@(mapcar #'expand-serializer body))))
 		,list))))
 
-  (define-deserializer with-length ((unit list lambda-list &rest body) stream)
-    (let ((item-count (gensym)))
+  (define-deserializer with-length ((unit list fields &rest body) stream)
+    (with-gensyms (item-count)
       `(let ((,item-count ,(list (ccase unit
 				   (u1 'parse-u1)
 				   (u2 'parse-u2)
 				   (u4 'parse-u4))
 				 stream)))
 	 (setf ,list
-	       (loop repeat ,item-count
-		     collect
-		     (let ,lambda-list
+	       (loop repeat ,item-count collect
+		     (let ,(if (symbolp fields) `(,fields) fields)
 		       ,@(loop for form in body
 			       collect (expand-deserializer form stream))
-		       (list ,@lambda-list)))))))
+		       ,(if (symbolp fields) fields `(list ,@fields))))))))
 
   ;; Byte manipulation
 
@@ -78,12 +77,15 @@
 
   ;; Constant pool references
 
-  (define-serializer utf8-info  (text) `(pool-index (make-utf8-info  ,text)))
-  (define-serializer class-info (name) `(pool-index (make-class-info ,name)))
+  (define-serializer utf8-info  (text)
+    `(pool-index (make-utf8-info ,text)))
 
   (define-deserializer utf8-info ((place) argument)
     `(setf ,place (utf8-info-text (aref (pool-array) ,argument))))
   
+  (define-serializer class-info (name)
+    `(pool-index (make-class-info ,name)))
+
   (define-deserializer class-info ((place) argument)
     `(setf ,place (class-info-name (aref (pool-array) ,argument))))
 
@@ -91,11 +93,32 @@
     `(pool-index (make-name-and-type-info ,name ,type)))
 
   (define-deserializer name-and-type-info ((name type) argument)
-    (let ((info-ref (gensym)))
+    (with-gensyms (info-ref)
       `(let ((,info-ref (aref (pool-array) ,argument)))
 	 (setf ,name (name-and-type-info-name ,info-ref))
 	 (setf ,type (name-and-type-info-type ,info-ref)))))
 
+  (define-serializer method-handle-info (kind reference)
+    `(pool-index (make-method-handle-info ,kind ,reference)))
+
+  (define-deserializer method-handle-info ((kind reference) argument)
+    (with-gensyms (handle-ref)
+      `(let ((,handle-ref (aref (pool-array) ,argument)))
+	 (setf ,kind      (method-handle-info-kind      ,handle-ref))
+	 (setf ,reference (method-handle-info-reference ,handle-ref)))))
+
+  (define-serializer module-info (name)
+    `(pool-index (make-module-info ,name)))
+
+  (define-deserializer module-info ((place) argument)
+    `(setf ,place (make-module-info (aref (pool-array) ,argument))))
+
+  (define-serializer package-info (name)
+    `(pool-index (make-package-info ,name)))
+
+  (define-deserializer package-info ((place) argument)
+    `(setf ,place (make-package-info (aref (pool-array) ,argument))))
+  
   ;; Advanced
 
   (define-serializer access-modifiers (mod-list mod-map)
@@ -118,16 +141,16 @@
   ;; Pool index with unspecified type
 
   (define-serializer pool-index (constant)
-    `(pool-index (pool-array) ,constant))
+    `(pool-index ,constant))
 
   (define-deserializer pool-index ((place) index)
     `(setf ,place (aref (pool-array) ,index)))
 
   ;; Structures
 
-  (define-serializer field         (field) `(byte-list ,field     (constant-pool)))
-  (define-serializer method       (method) `(byte-list ,method    (constant-pool)))
-  (define-serializer attribute      (attr) `(byte-list ,attr      (constant-pool)))
+  (define-serializer field    (field) `(byte-list ,field  (constant-pool)))
+  (define-serializer method  (method) `(byte-list ,method (constant-pool)))
+  (define-serializer attribute (attr) `(byte-list ,attr   (constant-pool)))
 
   (define-deserializer field ((field) stream)
     `(setf ,field (parse-field-info ,stream (pool-array))))
@@ -149,6 +172,7 @@
     `(progn
        (defstruct (,name (:constructor ,(symbol-concatenate 'make- name) ,slots))
 	 ,@slots)
+
        (defmethod byte-list (,pool (,struct-obj ,name))
 	 (flet ((constant-pool () ,pool)
 		(pool-index (constant) (pool-index ,pool constant)))
@@ -156,6 +180,7 @@
 			       (function pool-index)))
 	   (with-slots ,slots ,struct-obj
 	     (list ,@(mapcar #'expand-serializer body)))))
+
        (defun ,(symbol-concatenate 'parse- name) (,struct-obj ,pool)
 	 (flet ((pool-array () ,pool))
 	   (declare (ignorable (function pool-array)))
@@ -164,10 +189,8 @@
 		     collect (expand-deserializer form struct-obj))
 	     (,(symbol-concatenate 'make- name) ,@slots)))))))
 
-#|
 (defmacro def-attribute (name name-string slots &body body)
-  (let ((struct-obj (gensym))
-	(pool (gensym)))
+  (with-gensyms (struct-obj pool byte-stream)
     `(progn
        (defstruct (,name (:constructor ,(symbol-concatenate 'make- name) ,slots))
 	 ,@slots)
@@ -177,31 +200,24 @@
 		(pool-index (constant) (pool-index ,pool constant)))
 	   (declare (ignorable (function constant-pool)
 			       (function pool-index)))
-	   (with-slots ,slots ,struct-obj
-	     (list
-	      (u2 (pool-index (make-utf8-info ,name-string)))
-	      ,@(mapcar #'expand-serializer body)))))
+	   (flet ((serialize-body ()
+		    (with-slots ,slots ,struct-obj
+		      (list ,@(mapcar #'expand-serializer body)))))
+	     (let ((body (flatten (serialize-body) :remove-nil t)))
+	       (list
+		(u2 (pool-index (make-utf8-info ,name-string)))
+		(u4 (length body))
+		body)))))
 
        (setf (gethash ,name-string *attribute-parsers*)
-	     (lambda (,class-bytes ,pool-array)
-
-	       ))
-       (defun ,(symbol-concatenate 'parse- name) (,struct-obj ,pool)
-	 (flet ((pool-array () ,pool))
-	   (declare (ignorable (function pool-array)))
-	   (let ,slots
-	     ,@(loop for form in body
-		     collect (expand-deserializer form struct-obj))
-	     (,(symbol-concatenate 'make- name) ,@slots)))))))
-
-(defmacro def-attribute (name name-string slots &body body)
-  `(def-jstruct ,name ,slots
-     ;; all attributes have this structure: u2 name, u4 length, bytes
-     (u2-pool-index (make-utf8-info ,name-string))
-     (let ((body-bytes (flatten (list ,@body) :remove-nil t)))
-       (list (u4 (length body-bytes))
-	     body-bytes))))
-|#
+	     (lambda (,byte-stream ,pool)
+	       (declare (ignorable ,byte-stream))
+	       (flet ((pool-array () ,pool))
+		 (declare (ignorable (function pool-array)))
+		 (let ,slots
+		   ,@(loop for form in body
+			   collect (expand-deserializer form byte-stream))
+		   (,(symbol-concatenate 'make- name) ,@slots))))))))
 
 (defparameter *attribute-parsers*
   (make-hash-table :test 'equal))
@@ -243,7 +259,7 @@
   (u2 (access-modifiers flags *field-modifiers*))
   (u2 (utf8-info name))
   (u2 (utf8-info descriptor))
-  (with-length u2 attributes (attribute)
+  (with-length u2 attributes attribute
     (attribute attribute)))
 
 (defparameter *method-modifiers*
@@ -264,7 +280,7 @@
   (u2 (access-modifiers flags *method-modifiers*))
   (u2 (utf8-info name))
   (u2 (utf8-info descriptor))
-  (with-length u2 attributes (attribute)
+  (with-length u2 attributes attribute
     (attribute attribute)))
 
 (defparameter *class-modifiers*
@@ -284,13 +300,13 @@
   (u2 (access-modifiers flags *class-modifiers*))
   (u2 (class-info name))
   (u2 (class-info parent))
-  (with-length u2 interfaces (interface)
+  (with-length u2 interfaces interface
     (u2 (class-info interface)))
-  (with-length u2 fields (field)
+  (with-length u2 fields field
     (field field))
-  (with-length u2 methods (method)
+  (with-length u2 methods method
     (method method))
-  (with-length u2 attributes (attribute)
+  (with-length u2 attributes attribute
     (attribute attribute)))
 
 (defun java-class-bytes (java-class &optional (pool (make-constant-pool)))
@@ -317,7 +333,7 @@
     (declare (ignore magic))
     (setf (java-class-minor-version jclass) minor-version)
     (setf (java-class-major-version jclass) major-version)
-    jclass))
+    (values jclass pool-array)))
 
 (defun disassemble-file (path)
   (with-open-file (stream path
@@ -329,9 +345,7 @@
       (read-sequence buffer stream)
       (disassemble-jclass buffer))))
 
-#|
-
-(def-attribute "ConstantValue" (value)
+(def-attribute constant-value "ConstantValue" (value)
   (u2 (utf8-info value)))
 
 ;; Code
@@ -355,11 +369,11 @@
     (:enum         #x4000)))
 
 (def-attribute inner-classes "InnerClasses" (classes)
-  (with-length u2 classes ((inner outer name access))
+  (with-length u2 classes (inner outer name access)
     (u2 (class-info inner))
     (u2 (class-info outer))
     (u2 (utf8-info name))
-    (u2 (access-flags *inner-class* access))))
+    (u2 (access-modifiers *inner-class-modifiers* access))))
 
 (def-attribute enclosing-method "EnclosingMethod" (class name type)
   (u2 (class-info class))
@@ -384,6 +398,7 @@
 
 (def-attribute deprecated "Deprecated" ())
 
+#|
 (def-attribute runtime-visible-annotations
     "RuntimeVisibleAnnotations"
     (annotations)
@@ -440,7 +455,6 @@
     (with-length u2 anotations (annotation)
       (annotation annotation))))
 
-#|
 ;; TODO: parse type annotations
 
 (def-attribute runtime-visible-type-annotations
@@ -454,15 +468,16 @@
     (annotations)
   (with-length u2 annotations (annotation)
     (type-annotation annotation)))
-|#
 
 (def-attribute annotation-default "AnnotationDefault" (element-value)
   (element-value element-value))
+|#
 
+;; needs debugging
 (def-attribute bootstrap-methods "BootstrapMethods" (methods)
-  (with-length u2 methods ((method-ref arguments))
-    (u2 (method-handle-info method-ref))
-    (with-length u2 arguments (argument)
+  (with-length u2 methods (kind reference arguments)
+    (u2 (method-handle-info kind reference))
+    (with-length u2 arguments argument
       (u2 (pool-index argument)))))
 
 (defparameter *parameter-modifiers*
@@ -471,9 +486,14 @@
     (:mandated     #x8000)))
 
 (def-attribute method-parameters "MethodParameters" (parameters)
-  (with-length u1 parameters ((name access-flags))
+  (with-length u1 parameters (name access-flags)
     (u2 (utf8-info name))
     (u2 (access-modifiers access-flags *parameter-modifiers*))))
+
+(defparameter *module-modifiers*
+  '((:open         #x0020)
+    (:synthetic    #x1000)
+    (:mandated     #x8000)))
 
 (defparameter *require-modifiers*
   '((:transitive   #x0020)
@@ -493,29 +513,29 @@
   (u2 (utf8-info name))
   (u2 (access-modifiers flags *module-modifiers*))
   (u2 (utf8-info version))
-  (with-length u2 requires ((module flags version))
+  (with-length u2 requires (module flags version)
     (u2 (module-info module))
     (u2 (access-modifiers flags *require-modifiers*))
     (u2 (utf8-info version)))
-  (with-length u2 exports ((package flags exports-to))
+  (with-length u2 exports (package flags exports-to)
     (u2 (package-info package))
-    (u2 (access-modifiers flags *exports-flags*))
+    (u2 (access-modifiers flags *exports-modifiers*))
     (with-length u2 exports-to (exports-to)
       (u2 (module-info exports-to))))
-  (with-length u2 opens ((package flags opens-to))
+  (with-length u2 opens (package flags opens-to)
     (u2 (package-info package))
     (u2 (access-modifiers flags *opens-modifiers*))
     (with-length u2 opens-to (opens-to)
       (u2 (module-info opens-to))))
   (with-length u2 uses (uses)
     (u2 (class-info uses)))
-  (with-length u2 provides ((class provides-with))
-    (u2 (class-info class))
-    (with-length u2 provides-with (class)
-      (u2 (class-info class)))))
+  (with-length u2 provides (name provides-with)
+    (u2 (class-info name))
+    (with-length u2 provides-with (name)
+      (u2 (class-info name)))))
 
 (def-attribute module-packages "ModulePackages" (packages)
-  (with-length u2 packages (package)
+  (with-length u2 packages package
     (u2 (package-info package))))
 
 (def-attribute module-main-class "ModuleMainClass" (main-class)
@@ -525,17 +545,16 @@
   (u2 (class-info host-class)))
 
 (def-attribute nest-members "NestMembers" (classes)
-  (with-length u2 classes (class)
+  (with-length u2 classes class
     (u2 (class-info class))))
 
 (def-attribute record "Record" (components)
-  (with-length u2 components ((name descriptor attributes))
+  (with-length u2 components (name descriptor attributes)
     (u2 (utf8-info name))
     (u2 (utf8-info descriptor))
-    (with-length u2 attributes (attribute)
+    (with-length u2 attributes attribute
       (attribute attribute))))
 
 (def-attribute permitted-subclasses "PermittedSubclasses" (classes)
-  (with-length u2 classes (class)
+  (with-length u2 classes class
     (u2 (class-info class))))
-|#

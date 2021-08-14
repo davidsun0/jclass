@@ -2,7 +2,11 @@
   (:use :cl))
 (in-package #:jclass)
 
-;;; Utility functions
+;;; Utility
+
+(defmacro with-gensyms (symbols &body body)
+  `(let ,(loop for s in symbols collect `(,s (gensym)))
+     ,@body))
 
 (defun flatten (tree &key (remove-nil nil))
   (if remove-nil
@@ -215,8 +219,7 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 		  collect (apply #'constant-info-bytes pool p))))))
 
 (defmacro def-jconstant (name tag slots &body body)
-  (let ((pool (gensym))
-	(const-type (gensym)))
+  (with-gensyms (pool const-type)
     `(progn
        ;; each struct is a list with the constant type as the first value
        ;; this is so constants can be (portably) used as hash table keys
@@ -225,11 +228,11 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 			   ,slots))
 	 ,@slots)
 
-       ;; resolve constant specializes on the constant type via
-       ;; (apply pool #'resolve-constant constant-struct)
+       ;; resolve constant specializes on the constant type 
+       ;; via (apply pool #'resolve-constant constant-struct)
        (defmethod resolve-constant (,pool (,const-type (eql ',name)) &rest data)
 	 (pool-index ,pool (cons ',name data))
-	 ;; define u2-pool-index to resolve dependencies
+	 ;; locally define u2-pool-index to resolve dependencies
 	 (flet ((u2-pool-index (const)
 		    (apply #'resolve-constant ,pool const)))
 	   (declare (ignorable (function u2-pool-index)))
@@ -238,7 +241,7 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 	     ,@body)))
 
        (defmethod constant-info-bytes (,pool (,const-type (eql ',name)) &rest data)
-	 ;; define u2-pool-index to get the dependency index
+	 ;; locally define u2-pool-index to get the dependency index
 	 (flet ((u2-pool-index (const)
 		  (u2 (pool-index ,pool const nil))))
 	   (declare (ignorable (function u2-pool-index)))
@@ -308,7 +311,7 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 (def-jconstant package-info 20 (name)
   (u2-pool-index (make-utf8-info name)))
 
-;; Constatnt pool disassembly
+;; Constant pool disassembly
 
 (defun allocate-constant (bytes)
   ;; first pass over constant pool: split into entries
