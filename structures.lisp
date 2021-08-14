@@ -381,60 +381,107 @@
 
 (def-attribute deprecated "Deprecated" ())
 
-#|
-(defun write-annotation (annotation pool)
-  )
-
-(defun write-element-value (type value pool)
+(defun write-element-value (tag value pool)
   (list
-   (u1 (char-code type))
-   (ccase type
-     (#\B (u2 (pool-index pool (make-integer-info value))))
+   (u1 (char-code tag))
+   (ccase tag
+     ((#\B #\I #\S #\Z)
+      (u2 (pool-index pool (make-integer-info value))))
      (#\C (u2 (pool-index pool (make-integer-info (char-code value)))))
      (#\D (u2 (pool-index pool (make-double-info value))))
      (#\F (u2 (pool-index pool (make-float-info value))))
-     (#\I (u2 (pool-index pool (make-integer-info value))))
      (#\L (u2 (pool-index pool (make-long-info value))))
-     (#\S (u2 (pool-index pool (make-integer-info value))))
-     (#\Z (u2 (pool-index pool (make-integer-info (if value 1 0)))))
      (#\s (u2 (pool-index pool (make-utf8-info value))))
      (#\e (destructuring-bind (type const) value
 	    (list
 	     (u2 (pool-index pool (make-utf8-info type)))
 	     (u2 (pool-index pool (make-utf8-info const))))))
-     (#\@ (write-annotation value pool))
+     (#\@ (byte-list value pool))
      (#\[ (let ((values value))
 	    (list
 	     (u2 (length values))
-	     (mapcar #'element-value values)))))))
+	     (loop for (tag value) in values
+		   collect (write-element-value tag value pool))))))))
+
+(defun parse-element-value (byte-stream pool-array)
+  (let ((tag (code-char (parse-u1 byte-stream)))
+	(value))
+    (flet ((pool-lookup ()
+	     (aref pool-array (parse-u2 byte-stream))))
+      (setf value
+	    (ccase tag
+	      ((#\B #\I #\S #\Z)
+	       (integer-info-value (pool-lookup)))
+	      (#\C (code-char (integer-info-value (pool-lookup))))
+	      (#\D (double-info-ieee-bits (pool-lookup)))
+	      (#\F (float-info-ieee-bits (pool-lookup)))
+	      (#\J (long-info-value (pool-lookup)))
+	      (#\s (string-info-text (pool-lookup)))
+	      (#\e (list
+		    (utf8-info-text (pool-lookup))
+		    (utf8-info-text (pool-lookup))))
+	      (#\@ (parse-annotation byte-stream pool-array))
+	      (#\[ (let ((count (parse-u2 byte-stream)))
+		     (loop repeat count
+			   collect (parse-element-value byte-stream pool-array))))))
+      (list tag value))))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (def-serialization element-value (tag value) byte-stream
+    `(write-element-value ,tag ,value (constant-pool))
+    `(destructuring-bind (tag% value%)
+	 (parse-element-value ,byte-stream (pool-array))
+       (setf ,tag tag%
+	     ,value value%)))
+
+  (def-jstruct annotation (type element-value-pairs)
+    (u2 (utf8-info type))
+    (with-length u2 element-value-pairs (name tag value)
+      (u2 (utf8-info name))
+      (element-value tag value)))
+
+  (def-serialization annotation (annotation) byte-stream
+    `(byte-list ,annotation (constant-pool))
+    `(setf ,annotation (parse-annotation ,byte-stream (pool-array)))))
 
 (def-attribute runtime-visible-annotations
     "RuntimeVisibleAnnotations"
     (annotations)
-  (with-length u2 anotations annotation
+  (with-length u2 annotations annotation
     (annotation annotation)))
 
 (def-attribute runtime-invisible-annotations
     "RuntimeInvisibleAnnotations"
     (annotations)
-  (with-length u2 anotations annotation
+  (with-length u2 annotations annotation
     (annotation annotation)))
 
 (def-attribute runtime-visible-parameter-annotations
     "RuntimeVisibleParameterAnnotations"
     (parameters)
   (with-length u1 parameters annotations
-    (with-length u2 anotations annotation
+    (with-length u2 annotations annotation
       (annotation annotation))))
 
 (def-attribute runtime-invisible-parameter-annotations
     "RuntimeInvisibileParameterAnnotations"
     (parameters)
   (with-length u1 parameters annotations
-    (with-length u2 anotations annotation
+    (with-length u2 annotations annotation
       (annotation annotation))))
 
+#|
 ;; TODO: parse type annotations
+
+(def-jstruct type-annotation
+    (target-type target-info target-path type element-value-pairs)
+  (u1 target-type)
+  (? target-info)
+  (? target-path)
+  (u2 type)
+  (with-length u2 element-value-pairs (name tag value)
+    (u2 (utf8-info name))
+    (element-value tag value)))
 
 (def-attribute runtime-visible-type-annotations
     "RuntimeVisibleTypeAnnotations"
@@ -447,10 +494,10 @@
     (annotations)
   (with-length u2 annotations annotation
     (type-annotation annotation)))
-
-(def-attribute annotation-default "AnnotationDefault" (element-value)
-  (element-value element-value))
 |#
+
+(def-attribute annotation-default "AnnotationDefault" (tag value)
+  (element-value tag value))
 
 (def-attribute bootstrap-methods "BootstrapMethods" (methods)
   (with-length u2 methods (kind reference arguments)
