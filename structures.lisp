@@ -1,18 +1,21 @@
 (in-package #:jclass)
 
-(defmacro define-serializer (fn lambda-list &body body)
+(defmacro def-serialization (name
+			     lambda-list
+			     deserialization-input
+			     serialization-body
+			     deserialization-body)
   (with-gensyms (argument)
-    `(setf (gethash ',fn *serializers*)
-	   (lambda (,argument)
-	     (destructuring-bind ,lambda-list ,argument
-	       ,@body)))))
-
-(defmacro define-deserializer (fn lambda-list &body body)
-  (with-gensyms (argument)
-    `(setf (gethash ',fn *deserializers*)
-	   (lambda (&rest ,argument)
-	     (destructuring-bind ,lambda-list ,argument
-	       ,@body)))))
+    `(progn
+       (setf (gethash ',name *serializers*)
+	     (lambda (,argument)
+	       (destructuring-bind ,lambda-list ,argument
+		 ,serialization-body)))
+       (setf (gethash ',name *deserializers*)
+	     (lambda (&rest ,argument)
+	       (destructuring-bind (,lambda-list ,deserialization-input)
+		   ,argument
+		 ,deserialization-body))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
@@ -39,16 +42,14 @@
 	      (apply deserial-fn (cdr form) args)
 	      (error "Can't find deserializer for ~A: ~A" form args)))))
 
-  (define-serializer with-length (unit list fields &rest body)
+  (def-serialization with-length (unit list fields &rest body) stream
     (with-gensyms (term)
       `(list
 	(,unit (length ,list))
 	(mapcar (lambda (&rest ,term)
 		  (destructuring-bind (,fields) ,term
 		    (list ,@(mapcar #'expand-serializer body))))
-		,list))))
-
-  (define-deserializer with-length ((unit list fields &rest body) stream)
+		,list)))
     (with-gensyms (item-count)
       `(let ((,item-count ,(list (ccase unit
 				   (u1 'parse-u1)
@@ -64,102 +65,85 @@
 
   ;; Byte manipulation
 
-  (define-serializer u1 (inner) `(u1 ,(expand-serializer inner)))
-  (define-serializer u2 (inner) `(u2 ,(expand-serializer inner)))
-  (define-serializer u4 (inner) `(u4 ,(expand-serializer inner)))
+  (def-serialization u1 (value) byte-stream
+    `(u1 ,(expand-serializer value))
+    (expand-deserializer value `(parse-u1 ,byte-stream)))
+  
+  (def-serialization u2 (value) byte-stream
+    `(u2 ,(expand-serializer value))
+    (expand-deserializer value `(parse-u2 ,byte-stream)))
 
-  (define-deserializer u1 ((inner) stream)
-    (expand-deserializer inner `(parse-u1 ,stream)))
-  (define-deserializer u2 ((inner) stream)
-    (expand-deserializer inner `(parse-u2 ,stream)))
-  (define-deserializer u4 ((inner) stream)
-    (expand-deserializer inner `(parse-u4 ,stream)))
+  (def-serialization u4 (value) byte-stream
+    `(u4 ,(expand-serializer value))
+    (expand-deserializer value `(parse-u4 ,byte-stream)))
 
   ;; Constant pool references
 
-  (define-serializer utf8-info  (text)
-    `(pool-index (make-utf8-info ,text)))
+  (def-serialization utf8-info (text) utf8-index
+    `(pool-index (make-utf8-info ,text))
+    `(setf ,text (utf8-info-text (aref (pool-array) ,utf8-index))))
 
-  (define-deserializer utf8-info ((place) argument)
-    `(setf ,place (utf8-info-text (aref (pool-array) ,argument))))
-  
-  (define-serializer class-info (name)
-    `(pool-index (make-class-info ,name)))
+  (def-serialization class-info (name) class-index
+    `(pool-index (make-class-info ,name))
+    `(setf ,name (class-info-name (aref (pool-array) ,class-index))))
 
-  (define-deserializer class-info ((place) argument)
-    `(setf ,place (class-info-name (aref (pool-array) ,argument))))
-
-  (define-serializer name-and-type-info (name type)
-    `(pool-index (make-name-and-type-info ,name ,type)))
-
-  (define-deserializer name-and-type-info ((name type) argument)
+  (def-serialization name-and-type-info (name type) nti-index
+    `(pool-index (make-name-and-type-info ,name ,type))
     (with-gensyms (info-ref)
-      `(let ((,info-ref (aref (pool-array) ,argument)))
+      `(let ((,info-ref (aref (pool-array) ,nti-index)))
 	 (setf ,name (name-and-type-info-name ,info-ref))
 	 (setf ,type (name-and-type-info-type ,info-ref)))))
 
-  (define-serializer method-handle-info (kind reference)
-    `(pool-index (make-method-handle-info ,kind ,reference)))
-
-  (define-deserializer method-handle-info ((kind reference) argument)
+  (def-serialization method-handle-info (kind reference) mhi-index
+    `(pool-index (make-method-handle-info ,kind ,reference))
     (with-gensyms (handle-ref)
-      `(let ((,handle-ref (aref (pool-array) ,argument)))
+      `(let ((,handle-ref (aref (pool-array) ,mhi-index)))
 	 (setf ,kind      (method-handle-info-kind      ,handle-ref))
 	 (setf ,reference (method-handle-info-reference ,handle-ref)))))
 
-  (define-serializer module-info (name)
-    `(pool-index (make-module-info ,name)))
+  (def-serialization module-info (name) module-index
+    `(pool-index (make-module-info ,name))
+    `(setf ,name (make-module-info (aref (pool-array) ,module-index))))
 
-  (define-deserializer module-info ((place) argument)
-    `(setf ,place (make-module-info (aref (pool-array) ,argument))))
-
-  (define-serializer package-info (name)
-    `(pool-index (make-package-info ,name)))
-
-  (define-deserializer package-info ((place) argument)
-    `(setf ,place (make-package-info (aref (pool-array) ,argument))))
+  (def-serialization package-info (name) package-index
+    `(pool-index (make-package-info ,name))
+    `(setf ,name (make-package-info (aref (pool-array) ,package-index))))
   
-  ;; Advanced
+  ;; Special (de)serialization functions
 
-  (define-serializer access-modifiers (mod-list mod-map)
-    `(access-modifiers ,mod-list ,mod-map))
+  (def-serialization access-modifiers (flags modifier-list) bytes
+    `(access-modifiers ,flags ,modifier-list)
+    `(setf ,flags (access-flag-lookup ,bytes ,modifier-list)))
 
-  (define-deserializer access-modifiers ((place mod-map) bytes)
-    `(setf ,place (access-flag-lookup ,bytes ,mod-map)))
-
-  (define-serializer raw-bytes (bytes)
-    `(coerce 'list ,bytes))
-
-  (define-deserializer raw-bytes ((place) stream)
-    (let ((rbytes (gensym)))
-      `(setf ,place
-	     (let ((,rbytes ,stream))
-	       (with-slots (array index) ,rbytes
+  (def-serialization raw-bytes (raw-bytes) byte-stream
+    `(coerce 'list ,raw-bytes)
+    ;; byte-stream is a class-bytes struct
+    (with-gensyms (byte-list)
+      `(setf ,raw-bytes
+	     (let ((,byte-list ,byte-stream))
+	       (with-slots (array index) ,byte-list
 		 (parse-bytes (- (length array) index)
-			      ,rbytes))))))
+			      ,byte-list))))))
 
   ;; Pool index with unspecified type
 
-  (define-serializer pool-index (constant)
-    `(pool-index ,constant))
-
-  (define-deserializer pool-index ((place) index)
-    `(setf ,place (aref (pool-array) ,index)))
+  (def-serialization pool-index (constant) index
+    `(pool-index ,constant)
+    `(setf ,constant (aref (pool-array) ,index)))
 
   ;; Structures
 
-  (define-serializer field    (field) `(byte-list ,field  (constant-pool)))
-  (define-serializer method  (method) `(byte-list ,method (constant-pool)))
-  (define-serializer attribute (attr) `(byte-list ,attr   (constant-pool)))
+  (def-serialization field (field) byte-stream
+    `(byte-list ,field (constant-pool))
+    `(setf ,field (parse-field-info ,byte-stream (pool-array))))
+  
+  (def-serialization method (method) byte-stream
+    `(byte-list ,method (constant-pool))
+    `(setf ,method (parse-method-info ,byte-stream (pool-array))))
 
-  (define-deserializer field ((field) stream)
-    `(setf ,field (parse-field-info ,stream (pool-array))))
-
-  (define-deserializer method ((method) stream)
-    `(setf ,method (parse-method-info ,stream (pool-array))))
-
-  (define-deserializer attribute ((attr) stream)
-    `(setf ,attr (parse-attribute ,stream (pool-array))))
+  (def-serialization attribute (attribute) byte-stream
+    `(byte-list ,attribute (constant-pool))
+    `(setf ,attribute (parse-field-info ,byte-stream (pool-array))))
 
   ) ; end eval-when
 
@@ -167,8 +151,7 @@
   (:documentation "Constructs the binary form of a JVM structure."))
 
 (defmacro def-jstruct (name slots &body body)
-  (let ((struct-obj (gensym))
-	(pool (gensym)))
+  (with-gensyms (struct-obj pool byte-stream)
     `(progn
        (defstruct (,name (:constructor ,(symbol-concatenate 'make- name) ,slots))
 	 ,@slots)
@@ -181,12 +164,12 @@
 	   (with-slots ,slots ,struct-obj
 	     (list ,@(mapcar #'expand-serializer body)))))
 
-       (defun ,(symbol-concatenate 'parse- name) (,struct-obj ,pool)
+       (defun ,(symbol-concatenate 'parse- name) (,byte-stream ,pool)
 	 (flet ((pool-array () ,pool))
 	   (declare (ignorable (function pool-array)))
 	   (let ,slots
 	     ,@(loop for form in body
-		     collect (expand-deserializer form struct-obj))
+		     collect (expand-deserializer form byte-stream))
 	     (,(symbol-concatenate 'make- name) ,@slots)))))))
 
 (defmacro def-attribute (name name-string slots &body body)
@@ -399,16 +382,6 @@
 (def-attribute deprecated "Deprecated" ())
 
 #|
-(def-attribute runtime-visible-annotations
-    "RuntimeVisibleAnnotations"
-    (annotations)
-  (with-length u2 anotations (type element-value-pairs)
-    (u2 (utf8-info type))
-    (with-length u2 element-value-pairs ((element-name value))
-      (u2 (utf8-info element))
-      ;; TODO: complicated parsing
-      )))
-
 (defun write-annotation (annotation pool)
   )
 
@@ -435,24 +408,30 @@
 	     (u2 (length values))
 	     (mapcar #'element-value values)))))))
 
+(def-attribute runtime-visible-annotations
+    "RuntimeVisibleAnnotations"
+    (annotations)
+  (with-length u2 anotations annotation
+    (annotation annotation)))
+
 (def-attribute runtime-invisible-annotations
     "RuntimeInvisibleAnnotations"
     (annotations)
-  (with-length u2 anotations (annotation)
+  (with-length u2 anotations annotation
     (annotation annotation)))
 
 (def-attribute runtime-visible-parameter-annotations
     "RuntimeVisibleParameterAnnotations"
     (parameters)
-  (with-length u1 parameters (annotations)
-    (with-length u2 anotations (annotation)
+  (with-length u1 parameters annotations
+    (with-length u2 anotations annotation
       (annotation annotation))))
 
 (def-attribute runtime-invisible-parameter-annotations
     "RuntimeInvisibileParameterAnnotations"
     (parameters)
-  (with-length u1 parameters (annotations)
-    (with-length u2 anotations (annotation)
+  (with-length u1 parameters annotations
+    (with-length u2 anotations annotation
       (annotation annotation))))
 
 ;; TODO: parse type annotations
@@ -460,20 +439,19 @@
 (def-attribute runtime-visible-type-annotations
     "RuntimeVisibleTypeAnnotations"
     (annotations)
-  (with-length u2 annotations (annotation)
+  (with-length u2 annotations annotation
     (type-annotation annotation)))
 
 (def-attribute runtime-invisible-type-annotations
     "RuntimeInvisibleTypeAnnotations"
     (annotations)
-  (with-length u2 annotations (annotation)
+  (with-length u2 annotations annotation
     (type-annotation annotation)))
 
 (def-attribute annotation-default "AnnotationDefault" (element-value)
   (element-value element-value))
 |#
 
-;; needs debugging
 (def-attribute bootstrap-methods "BootstrapMethods" (methods)
   (with-length u2 methods (kind reference arguments)
     (u2 (method-handle-info kind reference))
