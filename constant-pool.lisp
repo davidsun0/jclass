@@ -156,16 +156,16 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 		       :message (format nil "Invalid modified UTF-8 sequence ~A"
 					bytes)))))
 	 output))
-      (coerce output 'string))))
+      (coerce (nreverse output) 'string))))
 
 ;; See *class-modifiers*, *method-modifiers*, *field-modifiers*, etc.
-(defun access-modifiers (mod-list mod-map)
-  (let ((flags (mapcar (lambda (x) (second (assoc x mod-map)))
-		       mod-list)))
+(defun access-modifiers (modifiers table)
+  (let ((flags (mapcar (lambda (x) (second (assoc x table)))
+		       modifiers)))
     (reduce #'logior flags)))
 
-(defun access-flag-lookup (mod-list flags)
-  (loop for modifier in mod-list
+(defun access-flag-lookup (flags table)
+  (loop for modifier in table
 	when (not (zerop (logand (second modifier) flags)))
 	  collect (first modifier)))
 
@@ -259,7 +259,8 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 (def-jconstant float-info 4 (ieee-bits)
   (u4 ieee-bits))
 
-;; pool-index implements long-info and double-info taking two pool slots
+;; pool-index and parse-constant-pool implement the fact that
+;; long-info and double-info take two pool slots
 (def-jconstant long-info 5 (value)
   (u4 (ash value -32))
   (u4 value))
@@ -410,6 +411,6 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 	      constant)))
     ;; parse dependencies
     (loop for i from 1 upto size
-	  do (format t "~A: ~A~%" i (build-constant pool i)))
+	  do (build-constant pool i))
     pool))
 
