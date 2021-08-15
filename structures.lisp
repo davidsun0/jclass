@@ -143,7 +143,7 @@
 
   (def-serialization attribute (attribute) byte-stream
     `(byte-list ,attribute (constant-pool))
-    `(setf ,attribute (parse-field-info ,byte-stream (pool-array))))
+    `(setf ,attribute (parse-attribute ,byte-stream (pool-array))))
 
   ) ; end eval-when
 
@@ -171,36 +171,6 @@
 	     ,@(loop for form in body
 		     collect (expand-deserializer form byte-stream))
 	     (,(symbol-concatenate 'make- name) ,@slots)))))))
-
-(defmacro def-attribute (name name-string slots &body body)
-  (with-gensyms (struct-obj pool byte-stream)
-    `(progn
-       (defstruct (,name (:constructor ,(symbol-concatenate 'make- name) ,slots))
-	 ,@slots)
-
-       (defmethod byte-list (,pool (,struct-obj ,name))
-	 (flet ((constant-pool () ,pool)
-		(pool-index (constant) (pool-index ,pool constant)))
-	   (declare (ignorable (function constant-pool)
-			       (function pool-index)))
-	   (flet ((serialize-body ()
-		    (with-slots ,slots ,struct-obj
-		      (list ,@(mapcar #'expand-serializer body)))))
-	     (let ((body (flatten (serialize-body) :remove-nil t)))
-	       (list
-		(u2 (pool-index (make-utf8-info ,name-string)))
-		(u4 (length body))
-		body)))))
-
-       (setf (gethash ,name-string *attribute-parsers*)
-	     (lambda (,byte-stream ,pool)
-	       (declare (ignorable ,byte-stream))
-	       (flet ((pool-array () ,pool))
-		 (declare (ignorable (function pool-array)))
-		 (let ,slots
-		   ,@(loop for form in body
-			   collect (expand-deserializer form byte-stream))
-		   (,(symbol-concatenate 'make- name) ,@slots))))))))
 
 (defparameter *attribute-parsers*
   (make-hash-table :test 'equal))
@@ -328,12 +298,177 @@
       (read-sequence buffer stream)
       (disassemble-jclass buffer))))
 
+;;; Attributes
+
+(defmacro def-attribute (name name-string slots &body body)
+  (with-gensyms (struct-obj pool byte-stream)
+    `(progn
+       (defstruct (,name (:constructor ,(symbol-concatenate 'make- name) ,slots))
+	 ,@slots)
+
+       (defmethod byte-list (,pool (,struct-obj ,name))
+	 (flet ((constant-pool () ,pool)
+		(pool-index (constant) (pool-index ,pool constant)))
+	   (declare (ignorable (function constant-pool)
+			       (function pool-index)))
+	   (flet ((serialize-body ()
+		    (with-slots ,slots ,struct-obj
+		      (list ,@(mapcar #'expand-serializer body)))))
+	     (let ((body (flatten (serialize-body) :remove-nil t)))
+	       (list
+		(u2 (pool-index (make-utf8-info ,name-string)))
+		(u4 (length body))
+		body)))))
+
+       (setf (gethash ,name-string *attribute-parsers*)
+	     (lambda (,byte-stream ,pool)
+	       (declare (ignorable ,byte-stream))
+	       (flet ((pool-array () ,pool))
+		 (declare (ignorable (function pool-array)))
+		 (let ,slots
+		   ,@(loop for form in body
+			   collect (expand-deserializer form byte-stream))
+		   (,(symbol-concatenate 'make- name) ,@slots))))))))
+
 (def-attribute constant-value "ConstantValue" (value)
   (u2 (utf8-info value)))
 
-;; Code
+(def-attribute code "Code" (max-stack max-locals bytecode exceptions attributes)
+  (u2 max-stack)
+  (u2 max-locals)
+  (with-length u4 bytecode b
+    ;; may be inefficient, but code size is capped at 2^16 bytes
+    (u1 b))
+  (with-length u2 exceptions (start-pc end-pc handler-pc catch-type)
+    (u2 start-pc)
+    (u2 end-pc)
+    (u2 handler-pc)
+    (u2 (class-info catch-type)))
+  (with-length u2 attributes attribute
+    (attribute attribute)))
 
-;; StackMapTable
+;; StackMapTable serialization
+
+(defun verification-bytes (verification constant-pool)
+  (destructuring-bind (tag &optional class-name) verification
+    (ccase tag
+      ;; top, int, float, long, null, uninitialized_this
+      ((0 1 2 3 4 5 6) tag)
+      ;; variable, uninitialized_variable
+      ((7 8)
+       (list tag (pool-index constant-pool (make-class-info class-name)))))))
+
+(defun parse-verification (byte-stream pool-array)
+  (let ((tag (parse-u1 byte-stream)))
+    (cond
+      ((<= 0 tag 6) (list tag))
+      ((or (= tag 7) (= tag 8))
+       (list tag (class-info-name (aref pool-array (parse-u2 byte-stream)))))
+      (t (error 'class-format-error
+		:message (format nil "Invalid verification_type_info tag ~A" tag))))))
+
+(defun stack-map-frame-bytes (frame constant-pool)
+  (let ((type (first frame)))
+    (cond
+      ;; same frame, chop frame
+      ((or (<= 0 type 63)
+	   (<= 248 type 250))
+       type)
+      ;; same locals 1 stack item frame
+      ((<= 64 type 127)
+       (list type
+	     (verification-bytes (second frame) constant-pool)))
+      ;; same locals 1 stack item frame extended
+      ((= type 247)
+       (destructuring-bind (offset verification) (rest frame)
+	 (list type
+	       (u2 offset)
+	       (verification-bytes verification constant-pool))))
+      ;; same frame extended
+      ((= type 251)
+       (list type
+	     (u2 (second frame))))
+      ;; append frame
+      ((<= 252 type 254)
+       (destructuring-bind (offset verifications) (rest frame)
+	 (assert (= (length verifications)
+		    (- type 251))
+		 (verifications)
+		 'class-format-error
+		 :message "StackMapFrame has incorrect number of verification infos")
+	 (list* type
+		(u2 offset)
+		(loop for v in verifications
+		      collect (verification-bytes v constant-pool)))))
+      ;; full frame
+      ((= type 255)
+       (destructuring-bind (offset local-count locals stack-count stacks)
+	   (rest frame)
+	 (assert (and (= (length locals) local-count)
+		      (= (length stacks) stack-count))
+		 (locals stacks)
+		 'class-format-error
+		 :message "StackMapFrame has incorrect number of verification infos")
+	 (list
+	  type
+	  (u2 offset)
+	  (u2 local-count)
+	  (loop for l in locals
+		collect (verification-bytes l constant-pool))
+	  (u2 stack-count)
+	  (loop for s in stacks
+		collect (verification-bytes s constant-pool))))))))
+
+(defun parse-stack-map-frame (byte-stream pool-array)
+  (let ((type (parse-u1 byte-stream)))
+    (cond
+      ;; same frame
+      ((<= 0 type 63)
+       (list type))
+      ;; same locals 1 stack item frame
+      ((<= 64 type 127)
+       (list type
+	     (parse-verification byte-stream pool-array)))
+      ;; same locals 1 stack item frame extended
+      ((= type 247)
+       (list type
+	     (parse-u2 byte-stream)
+	     (parse-verification byte-stream pool-array)))
+      ;; chop frame
+      ((<= 248 type 250)
+       (list type))
+      ;; same frame extended
+      ((= type 251)
+       (list type
+	     (parse-u2 byte-stream)))
+      ;; append frame
+      ((<= 252 type 254)
+       (list* type
+	      (parse-u2 byte-stream)
+	      (loop repeat (- type 251)
+		    collect (parse-verification byte-stream pool-array))))
+      ((= type 255)
+       (list (parse-u2 byte-stream)
+	     (let ((local-count (parse-u2 byte-stream)))
+	       (cons local-count
+		     (loop repeat local-count
+			   collect (parse-verification byte-stream pool-array))))
+	     (let ((stack-count (parse-u2 byte-stream)))
+	       (cons stack-count
+		     (loop repeat stack-count
+			   collect (parse-verification byte-stream pool-array))))))
+      (t
+       (error 'class-format-error
+	      :message (format nil "Invalid StackMapFrame type ~A" type))))))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (def-serialization stack-map-frame (frame) byte-stream
+    `(stack-map-frame-bytes ,frame (constant-pool))
+    `(setf ,frame (parse-stack-map-frame ,byte-stream (pool-array)))))
+
+(def-attribute stack-map-table "StackMapTable" (entries)
+  (with-length u2 entries frame
+    (stack-map-frame frame)))
 
 (def-attribute exceptions "Exceptions" (exceptions)
   (with-length u2 exceptions (ex)
@@ -373,13 +508,30 @@
 (def-attribute source-debug-extension "SourceDebugExtension" (debug)
   (raw-bytes debug))
 
-;; LineNumberTable
+(def-attribute line-number-table "LineNumberTable" (line-numbers)
+  (with-length u2 line-numbers (start-pc line-number)
+    (u2 start-pc)
+    (u2 line-number)))
 
-;; LocalVariableTable
+(def-attribute local-variable-table "LocalVariableTable" (local-variables)
+  (with-length u2 local-variables (start-pc length name descriptor index)
+    (u2 start-pc)
+    (u2 length)
+    (u2 (utf8-info name))
+    (u2 (utf8-info descriptor))
+    (u2 index)))
 
-;; LocalVariableTypeTable
+(def-attribute local-variable-type-table "LocalVariableTypeTable" (local-variables)
+  (with-length u2 local-variables (start-pc length name signature index)
+    (u2 start-pc)
+    (u2 length)
+    (u2 (utf8-info name))
+    (u2 (utf8-info signature))
+    (u2 index)))
 
 (def-attribute deprecated "Deprecated" ())
+
+;; Annotation serialization
 
 (defun write-element-value (tag value pool)
   (list
