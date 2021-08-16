@@ -5,12 +5,11 @@ making it easy to develop low level code for the JVM.
 
 ## Portability / Compatibility
 
-jclass should work conforming Common Lisps with the following features:
+jclass should work on conforming Common Lisps with the following features:
+- `char-code` and `code-char` must work with Unicode code points.
+    - If not working with Unicode, the functions must use ASCII values.
 
-- Unicode support requires that `char-code` return the Unicode code point.
-    - If not working with Unicode, `char-code` should return the ASCII value.
-
-Incompatibility with an implementation that has these features should be
+Incompatibility with an implementation that meets these requirements should be
 considered a bug. Please report any issues.
 
 ## Current Status
@@ -57,18 +56,20 @@ I have not yet settled on how to represent float and double literals.
     - [X] 4.7.30 Record
     - [X] PermittedSubclasses
 
-### Bytecode Layer
+### Bytecode Instructions
 
-This layer of abstracts over bytecode offsets with labels.
+In their raw form, these attributes work with bytecode offsets.
+The bytecode layer makes calculating offsets easy with the `label`
+pseudoinstruction.
 
 - [ ] Bytecode instructions (0 / 205)
 - [ ] Code attribute
 - [ ] StackMapTable attribute
-- [ ] LineNumberTable
-- [ ] LocalVariableTable
-- [ ] LocalVariableTypeTable
-- [ ] RuntimeVisibleTypeAnnotations
-- [ ] RuntimeInvisibleTypeAnnotations
+- [ ] LineNumberTable attribute
+- [ ] LocalVariableTable attribute
+- [ ] LocalVariableTypeTable attribute
+- [ ] RuntimeVisibleTypeAnnotations attribute
+- [ ] RuntimeInvisibleTypeAnnotations attribute
 
 ## Hello World Example
 
@@ -76,10 +77,10 @@ Generating an emtpy class:
 
 ```
 (with-open-file (stream "./MyClass.class"
-				:direction :output
-				:element-type '(unsigned-byte 8))
-	  (write-sequence
-	   (java-class-bytes
+                        :direction :output
+                        :element-type '(unsigned-byte 8))
+      (write-sequence
+       (java-class-bytes
         (make-java-class
           0 60 ; Java 16
           '(:public :abstract)
@@ -90,7 +91,7 @@ Generating an emtpy class:
           '() ; no methods
           '() ; no attributes
         ))
-	   stream))
+       stream))
 ```
 
 Output of official Java disassembler:
@@ -102,7 +103,7 @@ Classfile MyClass.class
   MD5 checksum 4640da844960e90c35d3c58d0a7d57db
 public abstract class MyClass implements java.lang.Iterable
   minor version: 0
-  major version: 57
+  major version: 60
   flags: (0x0401) ACC_PUBLIC, ACC_ABSTRACT
   this_class: #1                          // MyClass
   super_class: #2                         // java/lang/Object
@@ -120,13 +121,15 @@ Constant pool:
 
 ## Library Design
 
-For more information, see [TUTORIAL.md] and [MANUAL.md].
-
 jclass is based off of the Java Virtual Machine Specification, and not the
-Java Programming Language.
+Java Programming Language. As such, it can generate code that uses the
+`invokedynamic` instruction or use special characters in names.
 
-Aside from classes, fields and methods, all other information is encoded in 
-attributes.
+The class file is represented as a tree of structures. In addition to the
+typical accessors, there are also functions to convert structures into a
+list of bytes or deserialize a structure from bytes.
+
+For more information, see the [tutorial](TUTORIAL.md) and [manual](MANUAL.md).
 
 ## Verification
 
