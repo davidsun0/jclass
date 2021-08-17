@@ -140,3 +140,6 @@ versions. jclass does not ensure that a JVM will accept a generated class.
 
 It is up to the user to correctly match class file features.
 
+## License
+
+jclass is released under the MIT License.
