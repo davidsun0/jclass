@@ -351,12 +351,14 @@
 
 (defun verification-bytes (verification constant-pool)
   (destructuring-bind (tag &optional class-name) verification
-    (ccase tag
+    (cond
       ;; top, int, float, long, null, uninitialized_this
-      ((0 1 2 3 4 5 6) tag)
+      ((<= 0 tag 6) tag)
       ;; variable, uninitialized_variable
-      ((7 8)
-       (list tag (pool-index constant-pool (make-class-info class-name)))))))
+      ((<= 7 tag 8) (pool-index constant-pool
+				(make-class-info class-name)))
+      (t (error 'class-format-error
+		:message (format nil "Invalid verification_type_info tag ~A" tag))))))
 
 (defun parse-verification (byte-stream pool-array)
   (let ((tag (parse-u1 byte-stream)))
@@ -622,8 +624,13 @@
     (with-length u2 annotations annotation
       (annotation annotation))))
 
-#|
 ;; TODO: parse type annotations
+
+#|
+(def-jstruct type-path (paths)
+  (with-length u1 paths (kind argument-index)
+    (u1 kind)
+    (u1 argument-index)))
 
 (def-jstruct type-annotation
     (target-type target-info target-path type element-value-pairs)
