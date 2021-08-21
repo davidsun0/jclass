@@ -3,77 +3,11 @@
 jclass builds, assembles, and disassembles  Java class files in Common Lisp,
 making it easy to develop low level code for the JVM.
 
-## Portability / Compatibility
+## Getting Started / Example
 
-jclass should work on conforming Common Lisps with the following features:
-- `char-code` and `code-char` must work with Unicode code points.
-    - If not working with Unicode, the functions must use ASCII values.
+For in-depth information, see the [tutorial](TUTORIAL.md) and [manual](MANUAL.md).
 
-Incompatibility with an implementation that meets these requirements should be
-considered a bug. Please report any issues.
-
-## Current Status
-
-jclass is in its still in development. The API is not yet stable.
-
-I have not yet settled on how to represent float and double literals.
-
-### Implemented Structures
-
-- [X] 4.1 The ClassFile Structure
-- [X] 4.4 The Constant Pool
-- [X] 4.5 Fields
-- [X] 4.6 Methods
-- [ ] 4.7 Attributes
-    - [X] 4.7.2 ConstantValue
-    - [X] 4.7.3 Code
-    - [X] 4.7.4 StackMapTable
-    - [X] 4.7.5 Exceptions
-    - [X] 4.7.6 InnerClasses
-    - [X] 4.7.7 EnclosingMethod
-    - [X] 4.7.8 Synthetic
-    - [X] 4.7.9 Signature
-    - [X] 4.7.10 SourceFile
-    - [X] 4.7.11 SourceDebugExtension
-    - [X] 4.7.12 LineNumberTable
-    - [X] 4.7.13 LocalVariableTable
-    - [X] 4.7.14 LocalVariableTypeTable
-    - [X] 4.7.15 Deprecated
-    - [X] 4.7.16 RuntimeVisibleAnnotations
-    - [X] 4.7.17 RuntimeInvisibleAnnotations
-    - [X] 4.7.18 RuntimeVisibleParameterAnnotations
-    - [X] 4.7.19 RuntimeInvisibleParameterAnnotations
-    - [ ] 4.7.20 RuntimeVisibleTypeAnnotaions
-    - [ ] 4.7.21 RuntimeInvisibleTypeAnnotations
-    - [X] 4.7.22 AnnotationDefault
-    - [X] 4.7.23 BootstrapMethods
-    - [X] 4.7.24 MethodParameters
-    - [X] 4.7.25 Module
-    - [X] 4.7.26 ModulePackages
-    - [X] 4.7.27 ModuleMainClass
-    - [X] 4.7.28 NestHost
-    - [X] 4.7.29 NestMembers
-    - [X] 4.7.30 Record
-    - [X] PermittedSubclasses
-
-### Bytecode Instructions
-
-In their raw form, these attributes work with bytecode offsets.
-The bytecode layer makes calculating offsets easy with the `label`
-pseudoinstruction.
-
-- [ ] Bytecode instructions (0 / 205)
-- [ ] Code attribute
-- [ ] StackMapTable attribute
-- [ ] LineNumberTable attribute
-- [ ] LocalVariableTable attribute
-- [ ] LocalVariableTypeTable attribute
-- [ ] RuntimeVisibleTypeAnnotations attribute
-- [ ] RuntimeInvisibleTypeAnnotations attribute
-
-## Hello World Example
-
-Generating an emtpy class:
+Generating an sample class:
 
 ```
 (with-open-file (stream "./MyClass.class"
@@ -119,17 +53,14 @@ Constant pool:
 }
 ```
 
-## Library Design
+## Portability / Compatibility
 
-jclass is based off of the Java Virtual Machine Specification, and not the
-Java Programming Language. As such, it can generate code that uses the
-`invokedynamic` instruction or use special characters in names.
+jclass should work on conforming Common Lisps with the following features:
+- `char-code` and `code-char` must work with Unicode code points.
+    - If not working with Unicode, the functions must use ASCII values.
 
-The class file is represented as a tree of structures. In addition to the
-typical accessors, there are also functions to convert structures into a
-list of bytes or deserialize a structure from bytes.
-
-For more information, see the [tutorial](TUTORIAL.md) and [manual](MANUAL.md).
+Incompatibility with an implementation that meets these requirements should be
+considered a bug. Please report any issues.
 
 ## Verification
 
@@ -140,6 +71,100 @@ versions. jclass does not ensure that a JVM will accept a generated class.
 
 It is up to the user to correctly match class file features.
 
+## Current Status
+
+jclass is in its still in development. The API is not yet stable.
+
+### Implemented Structures
+
+- [X] 4.1 The ClassFile Structure
+- [X] 4.4 The Constant Pool
+- [X] 4.5 Fields
+- [X] 4.6 Methods
+- [ ] 4.7 Attributes
+    - [X] 4.7.2 ConstantValue
+    - [X] 4.7.3 Code
+    - [X] 4.7.4 StackMapTable
+    - [X] 4.7.5 Exceptions
+    - [X] 4.7.6 InnerClasses
+    - [X] 4.7.7 EnclosingMethod
+    - [X] 4.7.8 Synthetic
+    - [X] 4.7.9 Signature
+    - [X] 4.7.10 SourceFile
+    - [X] 4.7.11 SourceDebugExtension
+    - [X] 4.7.12 LineNumberTable
+    - [X] 4.7.13 LocalVariableTable
+    - [X] 4.7.14 LocalVariableTypeTable
+    - [X] 4.7.15 Deprecated
+    - [X] 4.7.16 RuntimeVisibleAnnotations
+    - [X] 4.7.17 RuntimeInvisibleAnnotations
+    - [X] 4.7.18 RuntimeVisibleParameterAnnotations
+    - [X] 4.7.19 RuntimeInvisibleParameterAnnotations
+    - [ ] 4.7.20 RuntimeVisibleTypeAnnotaions
+    - [ ] 4.7.21 RuntimeInvisibleTypeAnnotations
+    - [X] 4.7.22 AnnotationDefault
+    - [X] 4.7.23 BootstrapMethods
+    - [X] 4.7.24 MethodParameters
+    - [X] 4.7.25 Module
+    - [X] 4.7.26 ModulePackages
+    - [X] 4.7.27 ModuleMainClass
+    - [X] 4.7.28 NestHost
+    - [X] 4.7.29 NestMembers
+    - [X] 4.7.30 Record
+    - [X] PermittedSubclasses (Java 17 Preview Feature)
+
+### Bytecode Instructions
+
+- [ ] Bytecode instructions (182 / 205)
+    - [ ] Constants (18 / 21)
+    - [X] Loads (33 / 33)
+    - [X] Stores (33 / 33)
+    - [X] Stack (9 / 9)
+    - [X] Math (37 / 37)
+    - [X] Conversions (15 / 15)
+    - [X] Comparisons (19 / 19)
+    - [ ] References (4 / 18)
+    - [ ] Control (9 / 11)
+    - [ ] Extended (2 / 6)
+    - [X] Reserved (3 / 3)
+
+### Verification Layer
+
+In their raw form, these attributes work with bytecode offsets.
+The bytecode layer makes calculating offsets easy with the `label`
+pseudoinstruction.
+
+- [ ] Code attribute
+- [ ] StackMapTable attribute
+- [ ] LineNumberTable attribute
+- [ ] LocalVariableTable attribute
+- [ ] LocalVariableTypeTable attribute
+- [ ] RuntimeVisibleTypeAnnotations attribute
+- [ ] RuntimeInvisibleTypeAnnotations attribute
+
+## Library Design
+
+jclass is based off of the Java Virtual Machine Specification, and not the
+Java Programming Language. As such, it can generate code that uses the
+`invokedynamic` instruction or use special characters in names.
+
+The class file is represented as a tree of structures. Every named structure
+in the JVM Specification can be created and manipulated like any other lisp
+structure.
+
+There are functions to assemble and disassemble a `java-class` structure to
+and from a `.class` file. Note that fields, methods, and attributes cannot be
+serialized or deserialized outside of a class.
+
+jclass is built up in these layers:
+
+- `constant-pool.lisp`: handles constant resolution and byte I/O
+- `bytecode.lisp`: (dis)assembles bytecode
+- `structures.lisp`: defines class, field, method, and attribute structures and
+how they are (de)serialized
+- `verification.lisp`: abstracts over bytecode offsets with labels
+
 ## License
 
 jclass is released under the MIT License.
+

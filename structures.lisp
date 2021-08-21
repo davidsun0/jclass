@@ -333,30 +333,18 @@
 (def-attribute constant-value "ConstantValue" (value)
   (u2 (utf8-info value)))
 
-(def-attribute code "Code" (max-stack max-locals bytecode exceptions attributes)
-  (u2 max-stack)
-  (u2 max-locals)
-  (with-length u4 bytecode b
-    ;; may be inefficient, but code size is capped at 2^16 bytes
-    (u1 b))
-  (with-length u2 exceptions (start-pc end-pc handler-pc catch-type)
-    (u2 start-pc)
-    (u2 end-pc)
-    (u2 handler-pc)
-    (u2 (class-info catch-type)))
-  (with-length u2 attributes attribute
-    (attribute attribute)))
-
 ;; StackMapTable serialization
 
 (defun verification-bytes (verification constant-pool)
   (destructuring-bind (tag &optional class-name) verification
-    (ccase tag
+    (cond
       ;; top, int, float, long, null, uninitialized_this
-      ((0 1 2 3 4 5 6) tag)
+      ((<= 0 tag 6) tag)
       ;; variable, uninitialized_variable
-      ((7 8)
-       (list tag (pool-index constant-pool (make-class-info class-name)))))))
+      ((<= 7 tag 8) (pool-index constant-pool
+				(make-class-info class-name)))
+      (t (error 'class-format-error
+		:message (format nil "Invalid verification_type_info tag ~A" tag))))))
 
 (defun parse-verification (byte-stream pool-array)
   (let ((tag (parse-u1 byte-stream)))
@@ -622,8 +610,13 @@
     (with-length u2 annotations annotation
       (annotation annotation))))
 
-#|
 ;; TODO: parse type annotations
+
+#|
+(def-jstruct type-path (paths)
+  (with-length u1 paths (kind argument-index)
+    (u1 kind)
+    (u1 argument-index)))
 
 (def-jstruct type-annotation
     (target-type target-info target-path type element-value-pairs)
