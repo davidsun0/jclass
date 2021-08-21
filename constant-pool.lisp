@@ -396,7 +396,7 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 (defun parse-constant-pool (bytes)
   ;; constants are 1-indexed AND the size is 1 more than the actual count
   (let* ((size (1- (parse-u2 bytes)))
-	 (pool (make-array (+ 2 size) :initial-element nil)))
+	 (pool (make-array (1+ size) :initial-element nil)))
     (loop for i from 1 upto size do
       (setf (aref pool i)
 	    (let* ((constant (allocate-constant bytes))
