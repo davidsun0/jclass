@@ -6,4 +6,5 @@
   :description "Java class file manipulation"
   :serial t
   :components ((:file "constant-pool")
-	       (:file "structures")))
+	       (:file "structures")
+	       (:file "bytecode")))

@@ -113,34 +113,41 @@
 	    (list instruction (parse-u2 bytes))))))
 
 (defmacro def-encoding (instruction opcode encoder decoder)
-  (declare (ignore instruction encoder))
-  #|
-  `(setf (gethash ,instruction *bytecode-encoders*)
-	 (lambda (form pool offset)
-	   (declare (ignorable pool offset))
-	   ,encoder))
-  |#
-  `(setf (aref *bytecode-decoders* ,opcode)
-	 (lambda (bytes pool offset)
-	   (declare (ignorable pool offset))
-	   ,decoder)))
+  `(progn
+     (setf (gethash ,instruction *bytecode-encoders*)
+	   (lambda (form pool offset)
+	     (declare (ignorable pool offset))
+	     ;; unhygenic: exposes form, pool, offset
+	     (cons ,opcode ,encoder)))
+     (setf (aref *bytecode-decoders* ,opcode)
+	   (lambda (bytes pool offset)
+	     (declare (ignorable pool offset))
+	     ;; unhygenic: exposes bytes, pool, offset
+	     (cons ,instruction ,decoder)))))
 
 (def-encoding :ldc #x12
-  nil
-  (list :ldc (aref pool (parse-u1 bytes))))
+  ;; check for pool index < 256 ?
+  (u1 (pool-index pool (second form)))
+  (list (aref pool (parse-u1 bytes))))
 
 (def-encoding :ldc_w #x13
-  nil
-  (list :ldc_w (aref pool (parse-u2 bytes))))
+  (u2 (pool-index pool (second form)))
+  (list (aref pool (parse-u2 bytes))))
 
 (def-encoding :ldc2_w #x14
-  nil
-  ;; should this check for long / double constant type?
-  (list :ldc2_w (aref pool (parse-u2 bytes))))
+  ;; check for long / double constant type?
+  (u2 (pool-index pool (second form)))
+  (list (aref pool (parse-u2 bytes))))
 
-;; xAA tableswitch
+#|
+(def-encoding :tableswitch #xAA
+  ()
+  ())
 
-;; xAB lookupswitch
+(def-encodnig :lookupswitch #xAB
+  ()
+  ())
+|#
 
 (dolist (field-instruction
 	 '((#xB2 :getstatic)
@@ -148,6 +155,13 @@
 	   (#xB4 :getfield)
 	   (#xB5 :putfield)))
   (destructuring-bind (code instruction) field-instruction
+    (setf (gethash instruction *bytecode-encoders*)
+	  (lambda (form pool offset)
+	    (declare (ignore offset))
+	    (destructuring-bind (class-name name type) (rest form)
+	      (let* ((field-ref (make-field-ref-info class-name name type))
+		     (field-index (pool-index pool field-ref)))
+		(cons code (u2 field-index))))))
     (setf (aref *bytecode-decoders* code)
 	  (lambda (bytes pool offset)
 	    (declare (ignore offset))
@@ -158,44 +172,73 @@
 		    (field-ref-info-type field-ref)))))))
 
 (def-encoding :invokevirtual #xB6
-  nil
+  (destructuring-bind (class-name name type) (rest form)
+    (u2 (pool-index pool (make-field-ref-info class-name name type))))
   (let ((method-ref (aref pool (parse-u2 bytes))))
-    (list :invokevirtual
-	  (method-ref-info-class-name method-ref)
+    (list (method-ref-info-class-name method-ref)
 	  (method-ref-info-name method-ref)
 	  (method-ref-info-type method-ref))))
 
 (def-encoding :invokespecial #xB7
-  nil
+  (u2 (pool-index pool (second form)))
   (let ((method-ref (aref pool (parse-u2 bytes))))
     ;; method-ref may be either a method-ref-info or interface-method-ref-info
-    (list :invokespecial method-ref)))
+    (list method-ref)))
 
 (def-encoding :invokestatic #xB8
-  nil
+  (destructuring-bind (class-name name type) (rest form)
+    (u2 (pool-index pool (make-field-ref-info class-name name type))))
   (let ((method-ref (aref pool (parse-u2 bytes))))
-    (list :invokestatic
-	  (method-ref-info-class-name method-ref)
+    (list (method-ref-info-class-name method-ref)
 	  (method-ref-info-name method-ref)
 	  (method-ref-info-type method-ref))))
 
+#|
+invokeinterface syntax from the JVM specification:
+      
+invokeinterface
+indexbyte1
+indexbyte2
+count
+0
+
+Count is an unused byte that must not be zero.
+javac emits a 1 for count, so we do the same here.
+The 0 byte is also unused.
+When decoding, we simply ignore the two unused bytes.
+|#
 (def-encoding :invokeinterface #xB9
-  nil
+  (destructuring-bind (class-name name type) (rest form)
+    (let* ((method-ref (make-interface-method-ref-info class-name name type))
+	   (index (u2 (pool-index pool method-ref))))
+      (append index '(1 0))))
   (let ((method-ref (aref pool (parse-u2 bytes)))
-	(_ (parse-u2 bytes))) ; count is non-zero, but unused
+	(_ (parse-u2 bytes))) ;; skip unused bytes
     (declare (ignore _))
-    (list :invokeinterface
-	  (interface-method-ref-info-class-name method-ref)
+    (list (interface-method-ref-info-class-name method-ref)
 	  (interface-method-ref-info-name method-ref)
 	  (interface-method-ref-info-type method-ref))))
 
+#|
+Like invokeinterface, invokedynamic has two unused bytes:
+
+invokedynamic
+indexbyte1
+indexbyte2
+0
+0
+
+Both must be zero and are reserved for future use by the JVM.
+|#
 (def-encoding :invokedynamic #xBA
-  nil
+  (destructuring-bind (index name type) (rest form)
+    (let* ((dynamic-ref (make-invoke-dynamic-info index name type))
+	   (index (u2 (pool-index pool dynamic-ref))))
+      (append index '(0 0))))
   (let ((dynamic-ref (aref pool (parse-u2 bytes)))
-	(_ (parse-u2 bytes))) ; bytes reserved for future use by JVM
+	(_ (parse-u2 bytes))) ;; ignore unused bytes
     (declare (ignore _))
-    (list :invokedynamic
-	  (invoke-dynamic-info-bootstrap-index dynamic-ref)
+    (list (invoke-dynamic-info-bootstrap-index dynamic-ref)
 	  (invoke-dynamic-info-name dynamic-ref)
 	  (invoke-dynamic-info-type dynamic-ref))))
 
@@ -211,21 +254,44 @@
 	    (list instruction
 		  (class-info-name (aref pool (parse-u2 bytes))))))))
 
-;; xC4 wide
+#|
+(def-encoding :wide #xC4
+  (cond
+    ((eq (second form) :iinc)
+     (destructuring-bind (index const) (rest (rest form))
+       (append '(#x84) ; iinc opcode
+	       (u2 index)
+	       (u2 const))))
+    ((member (second form) '(:iload  :fload  :aload  :lload  :dstore
+			     :istore :fstore :astore :lstore :dstore :ret))
+     (cons opcode (u2 index)))
+    (t (error 'class-format-error
+	      :message (format nil "Invalid wide instruction ~A" form))))
+  (let ((op (parse-u1 bytes)))
+    (cond
+      ((= op #x84) ; iinc
+       (list :iinc (parse-u2 bytes) (parse-u2 bytes)))
+      ((check membership here)
+       (list (opcode) (parse-u2 bytes)))
+      (t (error 'class-format-error
+		:message (format nil "Unknown wide operand ~A" op))))))
+|#
 
 (def-encoding :multianewarray #xC5
-  nil
-  (list :multianewarray
-	(class-info-name (aref pool (parse-u2 bytes)))
+  (destructuring-bind (class-name dimensions) (rest form)
+    (let* ((class-ref (make-class-info class-name))
+	   (index (u2 (pool-index pool class-ref))))
+      (append index dimensions)))
+  (cons (class-info-name (aref pool (parse-u2 bytes)))
 	(parse-u1 bytes)))
 
 (def-encoding :goto_w #xC8
-  nil
-  (list :goto_w (parse-u4 bytes)))
+  (u4 (second form))
+  (parse-u4 bytes))
 
 (def-encoding :jsr_w #xC9
-  nil
-  (list :jsr_w (parse-u4 bytes)))
+  (u4 (second form))
+  (parse-u4 bytes))
 
 (defun encode-bytecode (instructions constant-pool)
   (let ((offset 0)

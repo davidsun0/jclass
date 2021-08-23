@@ -10,46 +10,87 @@ For in-depth information, see the [tutorial](TUTORIAL.md) and [manual](MANUAL.md
 Generating an sample class:
 
 ```
-(with-open-file (stream "./MyClass.class"
+(defparameter *main*
+  (make-method-info
+    '(:public :static)
+    "main"
+    "([Ljava/lang/String;)V" ; void (String[])
+    ;; attributes
+    (list (make-code
+            2 ; max stack size of 2
+            1 ; max local count of 1
+            `((:getstatic "java/lang/System" "out" "Ljava/io/PrintStream;")
+            (:ldc ,(make-string-info "Hello, world!"))
+            (:invokevirtual "java/io/PrintStream" "println" "(Ljava/lang/String;)V")
+            :return)
+            '() ; no exceptions
+            '() ; no code attributes
+    ))))
+
+(with-open-file (stream "./Hello.class"
                         :direction :output
                         :element-type '(unsigned-byte 8))
-      (write-sequence
-       (java-class-bytes
-        (make-java-class
-          0 60 ; Java 16
-          '(:public :abstract)
-          "MyClass"
-          "java/lang/Object"
-          '("java/lang/Iterable")
-          '() ; no fields
-          '() ; no methods
-          '() ; no attributes
+  (write-sequence
+    (java-class-bytes
+      (make-java-class
+        0 55 ; v55.0 = Java 11
+        '(:public)
+        "Hello"	; class Hello
+        "java/lang/Object" ; extends Object
+        '() ; no implemented interfaces
+        '() ; no fields
+        (list *main*) ; one method
+        '() ; no class attributes
         ))
-       stream))
+    stream))
 ```
 
 Output of official Java disassembler:
 
 ```
-$ javap -v MyClass
-Classfile MyClass.class
-  Last modified Aug 14, 2021; size 85 bytes
-  MD5 checksum 4640da844960e90c35d3c58d0a7d57db
-public abstract class MyClass implements java.lang.Iterable
+> javap -v Hello.class
+Classfile Hello.class
+  Last modified Aug 22, 2021; size 281 bytes
+  MD5 checksum b1d5aa6684ec1b281718b3cb249f21a0
+public class Hello
   minor version: 0
-  major version: 60
-  flags: (0x0401) ACC_PUBLIC, ACC_ABSTRACT
-  this_class: #1                          // MyClass
+  major version: 55
+  flags: (0x0001) ACC_PUBLIC
+  this_class: #1                          // Hello
   super_class: #2                         // java/lang/Object
-  interfaces: 1, fields: 0, methods: 0, attributes: 0
+  interfaces: 0, fields: 0, methods: 1, attributes: 0
 Constant pool:
-  #1 = Class              #4              // MyClass
-  #2 = Class              #5              // java/lang/Object
-  #3 = Class              #6              // java/lang/Iterable
-  #4 = Utf8               MyClass
-  #5 = Utf8               java/lang/Object
-  #6 = Utf8               java/lang/Iterable
+   #1 = Class              #9             // Hello
+   #2 = Class              #10            // java/lang/Object
+   #3 = Utf8               main
+   #4 = Utf8               ([Ljava/lang/String;)V
+   #5 = Fieldref           #11.#13        // java/lang/System.out:Ljava/io/PrintStream;
+   #6 = String             #16            // Hello, world!
+   #7 = Methodref          #17.#19        // java/io/PrintStream.println:(Ljava/lang/String;)V
+   #8 = Utf8               Code
+   #9 = Utf8               Hello
+  #10 = Utf8               java/lang/Object
+  #11 = Class              #12            // java/lang/System
+  #12 = Utf8               java/lang/System
+  #13 = NameAndType        #14:#15        // out:Ljava/io/PrintStream;
+  #14 = Utf8               out
+  #15 = Utf8               Ljava/io/PrintStream;
+  #16 = Utf8               Hello, world!
+  #17 = Class              #18            // java/io/PrintStream
+  #18 = Utf8               java/io/PrintStream
+  #19 = NameAndType        #20:#21        // println:(Ljava/lang/String;)V
+  #20 = Utf8               println
+  #21 = Utf8               (Ljava/lang/String;)V
 {
+  public static void main(java.lang.String[]);
+    descriptor: ([Ljava/lang/String;)V
+    flags: (0x0009) ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=3, locals=1, args_size=1
+         0: getstatic     #5                  // Field java/lang/System.out:Ljava/io/PrintStream;
+         3: ldc           #6                  // String Hello, world!
+         5: invokevirtual #7                  // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+         8: return
 }
 ```
 
@@ -115,17 +156,17 @@ jclass is in its still in development. The API is not yet stable.
 
 ### Bytecode Instructions
 
-- [ ] Bytecode instructions (182 / 205)
-    - [ ] Constants (18 / 21)
+- [ ] Bytecode instructions (202 / 205)
+    - [X] Constants (21 / 21)
     - [X] Loads (33 / 33)
     - [X] Stores (33 / 33)
     - [X] Stack (9 / 9)
     - [X] Math (37 / 37)
     - [X] Conversions (15 / 15)
     - [X] Comparisons (19 / 19)
-    - [ ] References (4 / 18)
+    - [X] References (18 / 18)
     - [ ] Control (9 / 11)
-    - [ ] Extended (2 / 6)
+    - [X] Extended (5 / 6)
     - [X] Reserved (3 / 3)
 
 ### Verification Layer
