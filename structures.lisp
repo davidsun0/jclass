@@ -134,15 +134,15 @@
   ;; Structures
 
   (def-serialization field (field) byte-stream
-    `(byte-list ,field (constant-pool))
+    `(byte-list (constant-pool) ,field)
     `(setf ,field (parse-field-info ,byte-stream (pool-array))))
   
   (def-serialization method (method) byte-stream
-    `(byte-list ,method (constant-pool))
+    `(byte-list (constant-pool) ,method)
     `(setf ,method (parse-method-info ,byte-stream (pool-array))))
 
   (def-serialization attribute (attribute) byte-stream
-    `(byte-list ,attribute (constant-pool))
+    `(byte-list (constant-pool) ,attribute)
     `(setf ,attribute (parse-attribute ,byte-stream (pool-array))))
 
   ) ; end eval-when
