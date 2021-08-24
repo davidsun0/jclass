@@ -3,13 +3,12 @@
 jclass builds, assembles, and disassembles  Java class files in Common Lisp,
 making it easy to develop low level code for the JVM.
 
-## Getting Started / Example
+## Hello World Example
 
-For in-depth information, see the [tutorial](TUTORIAL.md) and [manual](MANUAL.md).
-
-Generating an sample class:
+For in-depth information, see the [tutorial](#) and [manual](MANUAL.md).
 
 ```
+;; generate the main method
 (defparameter *main*
   (make-method-info
     '(:public :static)
@@ -20,13 +19,14 @@ Generating an sample class:
             2 ; max stack size of 2
             1 ; max local count of 1
             `((:getstatic "java/lang/System" "out" "Ljava/io/PrintStream;")
-            (:ldc ,(make-string-info "Hello, world!"))
-            (:invokevirtual "java/io/PrintStream" "println" "(Ljava/lang/String;)V")
-            :return)
+              (:ldc ,(make-string-info "Hello, world!"))
+              (:invokevirtual "java/io/PrintStream" "println" "(Ljava/lang/String;)V")
+              :return)
             '() ; no exceptions
             '() ; no code attributes
     ))))
 
+;; generate the file
 (with-open-file (stream "./Hello.class"
                         :direction :output
                         :element-type '(unsigned-byte 8))
@@ -45,10 +45,17 @@ Generating an sample class:
     stream))
 ```
 
-Output of official Java disassembler:
+The class file executes as expected:
 
 ```
-> javap -v Hello.class
+$ java Hello
+Hello, world!
+```
+
+Output from javap:
+
+```
+$ javap -v Hello.class
 Classfile Hello.class
   Last modified Aug 22, 2021; size 281 bytes
   MD5 checksum b1d5aa6684ec1b281718b3cb249f21a0
@@ -166,7 +173,7 @@ jclass is in its still in development. The API is not yet stable.
     - [X] Comparisons (19 / 19)
     - [X] References (18 / 18)
     - [ ] Control (9 / 11)
-    - [X] Extended (5 / 6)
+    - [ ] Extended (5 / 6)
     - [X] Reserved (3 / 3)
 
 ### Verification Layer
@@ -200,9 +207,9 @@ serialized or deserialized outside of a class.
 jclass is built up in these layers:
 
 - `constant-pool.lisp`: handles constant resolution and byte I/O
-- `bytecode.lisp`: (dis)assembles bytecode
 - `structures.lisp`: defines class, field, method, and attribute structures and
 how they are (de)serialized
+- `bytecode.lisp`: (dis)assembles bytecode
 - `verification.lisp`: abstracts over bytecode offsets with labels
 
 ## License
