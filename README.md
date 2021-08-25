@@ -163,7 +163,7 @@ jclass is in its still in development. The API is not yet stable.
 
 ### Bytecode Instructions
 
-- [X] Bytecode instructions (202 / 205)
+- [X] Bytecode instructions (205 / 205)
     - [X] Constants (21 / 21)
     - [X] Loads (33 / 33)
     - [X] Stores (33 / 33)
@@ -172,8 +172,8 @@ jclass is in its still in development. The API is not yet stable.
     - [X] Conversions (15 / 15)
     - [X] Comparisons (19 / 19)
     - [X] References (18 / 18)
-    - [X] Control (9 / 11)
-    - [X] Extended (5 / 6)
+    - [X] Control (11 / 11)
+    - [X] Extended (6 / 6)
     - [X] Reserved (3 / 3)
 
 ### Verification Layer
