@@ -278,7 +278,7 @@
 	   (flet ((serialize-body ()
 		    (with-slots ,slots ,struct-obj
 		      (list ,@(mapcar #'expand-serializer body)))))
-	     (let ((body (flatten (serialize-body) :remove-nil t)))
+	     (let ((body (flatten (serialize-body))))
 	       (list
 		(u2 (pool-index (make-utf8-info ,name-string)))
 		(u4 (length body))

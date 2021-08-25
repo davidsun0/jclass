@@ -8,8 +8,7 @@
 	      (u2 (java-class-minor-version java-class))
 	      (u2 (java-class-major-version java-class))
 	      (constant-pool-bytes pool)
-	      bytes)
-	     :remove-nil t)))
+	      bytes))))
 
 (defun disassemble-jclass (bytes)
   (let* ((cbytes (make-class-bytes :array bytes :index 0))

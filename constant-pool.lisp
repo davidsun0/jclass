@@ -6,23 +6,16 @@
   `(let ,(loop for s in symbols collect `(,s (gensym)))
      ,@body))
 
-(defun flatten (tree &key (remove-nil nil))
-  (if remove-nil
-      (labels ((flatten-remove (tree)
-		 (cond ((null tree) '())
-		       ((atom tree) (list tree))
-		       (t (loop for subtree in tree
-				if (listp subtree)
-				  append (flatten-remove subtree)
-				else
-				  collect subtree)))))
-	(flatten-remove tree))
-      (labels ((flatten-keep (tree)
-		 (if (atom tree)
-		     (list tree)
-		     (loop for subtree in tree
-			   append (flatten-keep subtree)))))
-	(flatten-keep tree))))
+(defun flatten (tree)
+  "Flattens a tree into a list of leaves. Treats nil as an empty list, not an atom."
+  (let ((output '()))
+    (labels ((traverse (tree)
+	       (cond
+		 ((null tree)) ;; ignore nil
+		 ((atom tree) (push tree output))
+		 (t (map nil #'traverse tree)))))
+      (traverse tree)
+      (nreverse output))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun symbol-concatenate (&rest values)
