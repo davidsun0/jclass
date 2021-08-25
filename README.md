@@ -129,7 +129,7 @@ jclass is in its still in development. The API is not yet stable.
 - [X] 4.4 The Constant Pool
 - [X] 4.5 Fields
 - [X] 4.6 Methods
-- [ ] 4.7 Attributes
+- [X] 4.7 Attributes
     - [X] 4.7.2 ConstantValue
     - [X] 4.7.3 Code
     - [X] 4.7.4 StackMapTable
@@ -148,8 +148,8 @@ jclass is in its still in development. The API is not yet stable.
     - [X] 4.7.17 RuntimeInvisibleAnnotations
     - [X] 4.7.18 RuntimeVisibleParameterAnnotations
     - [X] 4.7.19 RuntimeInvisibleParameterAnnotations
-    - [ ] 4.7.20 RuntimeVisibleTypeAnnotaions
-    - [ ] 4.7.21 RuntimeInvisibleTypeAnnotations
+    - [X] 4.7.20 RuntimeVisibleTypeAnnotaions
+    - [X] 4.7.21 RuntimeInvisibleTypeAnnotations
     - [X] 4.7.22 AnnotationDefault
     - [X] 4.7.23 BootstrapMethods
     - [X] 4.7.24 MethodParameters

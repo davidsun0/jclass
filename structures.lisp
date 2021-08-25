@@ -610,23 +610,106 @@
     (with-length u2 annotations annotation
       (annotation annotation))))
 
-;; TODO: parse type annotations
+(defun target-bytes (target-type target-info)
+  (cons
+   target-type
+   (case target-type
+     ;; empty target
+     ((#x13 #x14 #x15) '())
+     ;; type parameter target, formal parameter target
+     ((#x00 #x01 #x16)
+      (destructuring-bind (index) target-info
+	(u1 index)))
+     ;; supertype, throws target, catch target, offset target
+     ((#x10 #x17 #x42 #x43 #x44 #x45)
+      (destructuring-bind (index) target-info
+	(u2 index)))
+     ;; type parameter bound target
+     ((#x11 #x12)
+      (destructuring-bind (type-parameter-index bound-index) target-info
+	(cons (u1 type-parameter-index)
+	      (u1 bound-index))))
+     ;; localvar target
+     ((#x40 #x41)
+      (macrolet ((with-length (&whole form &rest rest)
+		   (declare (ignore rest))
+		   `,(expand-serializer form)))
+       (with-length u2 target-info (start-pc length index)
+	 (u2 start-pc)
+	 (u2 length)
+	 (u2 index))))
+     ;; type argument target
+     ((#x47 #x48 #x49 #x4A #x4B)
+      (destructuring-bind (offset type-argument-index) target-info
+	(list
+	 (u2 offset)
+	 (u1 type-argument-index))))
+     (t (error 'class-format-error
+	       :message "Unknown type annotation target type")))))
 
-#|
-(def-jstruct type-path (paths)
-  (with-length u1 paths (kind argument-index)
-    (u1 kind)
-    (u1 argument-index)))
+(defun parse-target (bytes)
+  (let ((target-type (parse-u1 bytes)))
+    (cons
+     target-type
+     (case target-type
+       ;; empty target
+       ((#x13 #x14 #x15) '())
+       ;; type parameter target, formal parameter target
+       ((#x00 #x01 #x16)
+	(list (parse-u1 bytes)))
+       ;; supertype, throws target, catch target, offset target
+       ((#x10 #x17 #x42 #x43 #x44 #x45)
+	(list (parse-u2 bytes)))
+       ;; type parameter bound target
+       ((#x11 #x12)
+	(list (parse-u1 bytes)
+	      (parse-u1 bytes)))
+       ;; localvar target
+       ((#x40 #x41)
+	(let ((target-info))
+	  (macrolet ((with-length (&whole form &rest rest)
+		       (declare (ignore rest))
+		       `,(expand-deserializer form 'bytes)))
+	    (with-length u2 target-info (start-pc length index)
+	      (u2 start-pc)
+	      (u2 length)
+	      (u2 index)))
+	  target-info))
+       ;; type argument target
+       ((#x47 #x48 #x49 #x4A #x4B)
+	(list (parse-u2 bytes)
+	      (parse-u1 bytes)))
+       (t (error 'class-format-error
+		 :message "Unknown type annotation target type"))))))
 
-(def-jstruct type-annotation
-    (target-type target-info target-path type element-value-pairs)
-  (u1 target-type)
-  (? target-info)
-  (? target-path)
-  (u2 type)
-  (with-length u2 element-value-pairs (name tag value)
-    (u2 (utf8-info name))
-    (element-value tag value)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (def-serialization target-info (type info) byte-stream
+    `(target-bytes ,type ,info)
+    `(let ((target (parse-target ,byte-stream)))
+       (setf ,type (first target))
+       ,info (rest target)))
+
+  (def-jstruct type-path (paths)
+    (with-length u1 paths (kind argument-index)
+      (u1 kind)
+      (u1 argument-index)))
+
+  (def-serialization type-path (type-path) byte-stream
+    `(byte-list ,type-path (constant-pool))
+    `(setf ,type-path (parse-type-path ,byte-stream (pool-array))))
+
+  (def-jstruct type-annotation
+      (target-type target-info target-path type element-value-pairs)
+    (target-info target-type target-info)
+    (type-path target-path)
+    (u2 type)
+    (with-length u2 element-value-pairs (name tag value)
+      (u2 (utf8-info name))
+      (element-value tag value)))
+
+  (def-serialization type-annotation (annotation) byte-stream
+    `(byte-list ,annotation (constant-pool))
+    `(setf ,annotation (parse-type-annotation ,byte-stream (pool-array)))))
 
 (def-attribute runtime-visible-type-annotations
     "RuntimeVisibleTypeAnnotations"
@@ -639,7 +722,6 @@
     (annotations)
   (with-length u2 annotations annotation
     (type-annotation annotation)))
-|#
 
 (def-attribute annotation-default "AnnotationDefault" (tag value)
   (element-value tag value))
