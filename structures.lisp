@@ -300,13 +300,20 @@
 ;; StackMapTable serialization
 
 (defun verification-bytes (verification constant-pool)
-  (destructuring-bind (tag &optional class-name) verification
+  (let ((tag (first verification)))
     (cond
       ;; top, int, float, long, null, uninitialized_this
       ((<= 0 tag 6) tag)
-      ;; variable, uninitialized_variable
-      ((<= 7 tag 8) (pool-index constant-pool
-				(make-class-info class-name)))
+      ;; variable
+      ((= tag 7)
+       (let* ((class-name (second verification))
+	      (class-info (make-class-info class-name))
+	      (index (pool-index constant-pool class-info)))
+	 (list tag (u2 index))))
+      ;; uninitialized_variable
+      ((= tag 8)
+       (let ((offset (second verification)))
+	 (list tag (u2 offset))))
       (t (error 'class-format-error
 		:message (format nil "Invalid verification_type_info tag ~A" tag))))))
 
@@ -314,18 +321,18 @@
   (let ((tag (parse-u1 byte-stream)))
     (cond
       ((<= 0 tag 6) (list tag))
-      ((or (= tag 7) (= tag 8))
+      ((= tag 7)
        (list tag (class-info-name (aref pool-array (parse-u2 byte-stream)))))
+      ((= tag 8)
+       (list tag (parse-u2 byte-stream)))
       (t (error 'class-format-error
 		:message (format nil "Invalid verification_type_info tag ~A" tag))))))
 
 (defun stack-map-frame-bytes (frame constant-pool)
   (let ((type (first frame)))
     (cond
-      ;; same frame, chop frame
-      ((or (<= 0 type 63)
-	   (<= 248 type 250))
-       type)
+      ;; same frame
+      ((<= 0 type 63) type)
       ;; same locals 1 stack item frame
       ((<= 64 type 127)
        (list type
@@ -336,13 +343,13 @@
 	 (list type
 	       (u2 offset)
 	       (verification-bytes verification constant-pool))))
-      ;; same frame extended
-      ((= type 251)
+      ;; chop frame, same frame extended
+      ((<= 248 type 251)
        (list type
 	     (u2 (second frame))))
       ;; append frame
       ((<= 252 type 254)
-       (destructuring-bind (offset verifications) (rest frame)
+       (destructuring-bind (offset &rest verifications) (rest frame)
 	 (assert (= (length verifications)
 		    (- type 251))
 		 (verifications)
@@ -386,11 +393,8 @@
        (list type
 	     (parse-u2 byte-stream)
 	     (parse-verification byte-stream pool-array)))
-      ;; chop frame
-      ((<= 248 type 250)
-       (list type))
-      ;; same frame extended
-      ((= type 251)
+      ;; chop frame, same frame extended
+      ((<= 248 type 251)
        (list type
 	     (parse-u2 byte-stream)))
       ;; append frame
