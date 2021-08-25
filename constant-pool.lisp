@@ -1,5 +1,3 @@
-(defpackage #:jclass
-  (:use :cl))
 (in-package #:jclass)
 
 ;;; Utility
