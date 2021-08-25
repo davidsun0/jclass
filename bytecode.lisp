@@ -85,7 +85,7 @@
     (setf (gethash instruction *bytecode-encoders*)
 	  (lambda (form pool offset)
 	    (declare (ignore pool offset))
-	    (cons code (u1 (first form)))))
+	    (cons code (u1 (second form)))))
     (setf (aref *bytecode-decoders* code)
 	  (lambda (bytes pool offset)
 	    (declare (ignore pool offset))
@@ -106,7 +106,7 @@
     (setf (gethash instruction *bytecode-encoders*)
 	  (lambda (form pool offset)
 	    (declare (ignore pool offset))
-	    (cons code (u2 (first form)))))
+	    (cons code (u2 (second form)))))
     (setf (aref *bytecode-decoders* code)
 	  (lambda (bytes pool offset)
 	    (declare (ignore pool offset))
@@ -139,15 +139,50 @@
   (u2 (pool-index pool (second form)))
   (list (aref pool (parse-u2 bytes))))
 
-#|
 (def-encoding :tableswitch #xAA
-  ()
-  ())
+  (destructuring-bind (default low high &rest offsets) (rest form)
+    (flatten
+     (list
+      ;; padding bytes (count the instruction byte itself)
+      (loop repeat (- 3 (mod offset 4))
+	    collect 0)
+      (u4 default)
+      (u4 low)
+      (u4 high)
+      (mapcar #'u4 offsets))))
+  (let* ((padding (loop repeat (- 3 (mod offset 4))
+			do (parse-u1 bytes)))
+	 (default (parse-u4 bytes))
+	 (low     (parse-u4 bytes))
+	 (high    (parse-u4 bytes)))
+    (declare (ignore padding))
+    (list* default
+	   low
+	   high
+	   (loop repeat (- (1+ high) low)
+		 collect (parse-u4 bytes)))))
 
-(def-encodnig :lookupswitch #xAB
-  ()
-  ())
-|#
+(def-encoding :lookupswitch #xAB
+  (destructuring-bind (default &rest match-offset-pairs) (rest form)
+    (flatten
+     (list
+      ;; padding bytes (count the instruction byte itself)
+      (loop repeat (- 3 (mod offset 4))
+	    collect 0)
+      (u4 default)
+      (u4 (length match-offset-pairs))
+      (loop for (key offset) in match-offset-pairs
+	    collect (u4 key)
+	    collect (u4 offset)))))
+  (let ((padding (loop repeat (- 3 (mod offset 4))
+		       do (parse-u1 bytes)))
+	(default (parse-u4 bytes))
+	(length  (parse-u4 bytes)))
+    (declare (ignore padding))
+    (cons default
+	  (loop repeat length
+		collect (list (parse-u4 bytes)
+			      (parse-u4 bytes))))))
 
 (dolist (field-instruction
 	 '((#xB2 :getstatic)
@@ -195,7 +230,7 @@
 
 #|
 invokeinterface syntax from the JVM specification:
-      
+
 invokeinterface
 indexbyte1
 indexbyte2
