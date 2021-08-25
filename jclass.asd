@@ -7,4 +7,5 @@
   :serial t
   :components ((:file "constant-pool")
 	       (:file "structures")
-	       (:file "bytecode")))
+	       (:file "bytecode")
+	       (:file "jclass")))
