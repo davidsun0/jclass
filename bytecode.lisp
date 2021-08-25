@@ -143,7 +143,7 @@
   (destructuring-bind (default low high &rest offsets) (rest form)
     (flatten
      (list
-      ;; padding bytes (count the instruction byte itself)
+      ;; padding bytes
       (loop repeat (- 3 (mod offset 4))
 	    collect 0)
       (u4 default)
@@ -166,7 +166,7 @@
   (destructuring-bind (default &rest match-offset-pairs) (rest form)
     (flatten
      (list
-      ;; padding bytes (count the instruction byte itself)
+      ;; padding bytes
       (loop repeat (- 3 (mod offset 4))
 	    collect 0)
       (u4 default)
@@ -294,28 +294,36 @@ Both must be zero and are reserved for future use by the JVM.
 	    (list instruction
 		  (class-info-name (aref pool (parse-u2 bytes))))))))
 
-#|
+(defparameter *wide-instructions*
+  '((#x84 :iinc)
+    (#x15 :iload)  (#x16 :lload)  (#x17 :fload)  (#x18 :dload)  (#x19 :aload)
+    (#x36 :istore) (#x37 :lstore) (#x38 :fstore) (#x39 :dstore) (#x3A :astore)))
+
 (def-encoding :wide #xC4
-  (cond
-    ((eq (second form) :iinc)
-     (destructuring-bind (index const) (rest (rest form))
-       (append '(#x84) ; iinc opcode
-	       (u2 index)
-	       (u2 const))))
-    ((member (second form) '(:iload  :fload  :aload  :lload  :dstore
-			     :istore :fstore :astore :lstore :dstore :ret))
-     (cons opcode (u2 index)))
-    (t (error 'class-format-error
-	      :message (format nil "Invalid wide instruction ~A" form))))
-  (let ((op (parse-u1 bytes)))
+  (let ((opcode (loop for (op instruction) in *wide-instructions*
+		      when (eq instruction (second form))
+			return op)))
+     (cond
+       ((null opcode)
+	(error 'class-format-error
+		 :message (format nil "Invalid wide instruction ~A" form)))
+       ((= opcode #x84)	; iinc
+	(destructuring-bind (index const) (rest (rest form))
+	  (cons opcode (append (u2 index) (u2 const)))))
+       (t (cons opcode (u2 (third form))))))
+  (let* ((opcode (parse-u1 bytes))
+	 (instruction (loop for (op instruction) in *wide-instructions*
+			    when (= op opcode)
+			      return instruction)))
     (cond
-      ((= op #x84) ; iinc
-       (list :iinc (parse-u2 bytes) (parse-u2 bytes)))
-      ((check membership here)
-       (list (opcode) (parse-u2 bytes)))
+      ((eq instruction :iinc)
+       (list instruction
+	     (parse-u2 bytes)
+	     (parse-u2 bytes)))
+      (instruction
+       (list instruction (parse-u2 bytes)))
       (t (error 'class-format-error
-		:message (format nil "Unknown wide operand ~A" op))))))
-|#
+		:message (format nil "Unknown wide operand ~A" opcode))))))
 
 (def-encoding :multianewarray #xC5
   (destructuring-bind (class-name dimensions) (rest form)
