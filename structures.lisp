@@ -427,7 +427,7 @@
     (stack-map-frame frame)))
 
 (def-attribute exceptions "Exceptions" (exceptions)
-  (with-length u2 exceptions (ex)
+  (with-length u2 exceptions ex
     (u2 (class-info ex))))
 
 (defparameter *inner-class-modifiers*
@@ -740,18 +740,18 @@
   (with-length u2 exports (package flags exports-to)
     (u2 (package-info package))
     (u2 (access-modifiers flags *exports-modifiers*))
-    (with-length u2 exports-to (exports-to)
+    (with-length u2 exports-to exports-to
       (u2 (module-info exports-to))))
   (with-length u2 opens (package flags opens-to)
     (u2 (package-info package))
     (u2 (access-modifiers flags *opens-modifiers*))
-    (with-length u2 opens-to (opens-to)
+    (with-length u2 opens-to opens-to
       (u2 (module-info opens-to))))
-  (with-length u2 uses (uses)
+  (with-length u2 uses uses
     (u2 (class-info uses)))
   (with-length u2 provides (name provides-with)
     (u2 (class-info name))
-    (with-length u2 provides-with (name)
+    (with-length u2 provides-with name
       (u2 (class-info name)))))
 
 (def-attribute module-packages "ModulePackages" (packages)
