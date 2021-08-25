@@ -5,7 +5,8 @@
   :author "David Sun"
   :description "Java class file manipulation"
   :serial t
-  :components ((:file "constant-pool")
+  :components ((:file "package")
+	       (:file "constant-pool")
 	       (:file "structures")
 	       (:file "bytecode")
 	       (:file "jclass")))
