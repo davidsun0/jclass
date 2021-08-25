@@ -88,31 +88,37 @@
 	    (ash (aref u4-bytes 2) 8)
 	    (aref u4-bytes 3))))
 
-(defun encode-modified-utf8 (character)
-  "Encodes a character as a list of modified UTF-8 bytes.
-Assumes char-code returns the Unicode code point.
-See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
-  (labels ((encode-code-point (code)
-	     (cond
-	       ((< 0 code #x80) (list code))
-	       ((< code #x800)
-		(list (logior #b11000000 (ash code -6))
-		      (logior #b10000000 (logand #x3F code))))
-	       ((< code #x10000)
-		(list (logior #b11100000 (ash code -12))
-		      (logior #b10000000 (logand #x3F (ash code -6)))
-		      (logior #b10000000 (logand #x3F code))))
-	       (t
-		(let* ((code (- code #x10000))
-		       (upper (ash code -10))
-		       (lower (logand code #x3FF)))
-		  ;; encode as UTF-16 surrogate pair
-		  (concatenate 'list
-			       (encode-code-point (+ #xD800 upper))
-			       (encode-code-point (+ #xDC00 lower))))))))
-    (encode-code-point (char-code character))))
+(defun encode-modified-utf8 (string)
+  "Encodes a string as a list of modified UTF-8 bytes."
+  ;; See JVM Spec 4.4.7 CONSTANT_Utf8_info
+  ;; String is encoded into UTF-16, then re-encoded to UTF-8
+  (let ((output '()))
+    (labels ((encode-code-point (code)
+	       (cond
+		 ((< 0 code #x80)
+		  (push code output))
+		 ((< code #x800)
+		  (push (logior #xb11000000 (ash code -6)) output)
+		  (push (logior #xb10000000 (logand #x3F code)) output))
+		 ((< code #x10000)
+		  (push (logior #xb11000000 (ash code -12)) output)
+		  (push (logior #xb10000000 (logand #x3F (ash code -6))) output)
+		  (push (logior #xb10000000 (logand #x3F code)) output))
+		 ((< code #x110000)
+		  (let* ((code (- code #x10000))
+			 ;; decompose into UTF-16 surrogate pairs
+			 (upper (ash code -10))
+			 (lower (logand code #x3FF)))
+		    (encode-code-point (+ #xD800 upper))
+		    (encode-code-point (+ #xDC00 lower))))
+		 (t (error "Invalid Unicode code point: ~A" code)))))
+      (loop for code in (coerce string 'list)
+	    do (encode-code-point (char-code code)))
+      (nreverse output))))
 
 (defun decode-modified-utf8 (bytes)
+  "Decodes a sequence of modified UTF-8 bytes into a string."
+  ;; See JVM Spec 4.4.7 CONSTANT_Utf8_info
   (let ((input (coerce bytes 'list))
 	(output '()))
     (labels ((extract-bits (mask shift byte)
@@ -249,7 +255,7 @@ See Java Virtual Machine specification 4.4.7 CONSTANT_Utf8_info."
 	     (list ,tag ,@body)))))))
 
 (def-jconstant utf8-info 1 (text)
-  (let ((text-bytes (flatten (map 'list #'encode-modified-utf8 text))))
+  (let ((text-bytes (encode-modified-utf8 text)))
     (list (u2 (length text-bytes))
 	  text-bytes)))
 
