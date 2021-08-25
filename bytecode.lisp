@@ -173,7 +173,7 @@
 
 (def-encoding :invokevirtual #xB6
   (destructuring-bind (class-name name type) (rest form)
-    (u2 (pool-index pool (make-field-ref-info class-name name type))))
+    (u2 (pool-index pool (make-method-ref-info class-name name type))))
   (let ((method-ref (aref pool (parse-u2 bytes))))
     (list (method-ref-info-class-name method-ref)
 	  (method-ref-info-name method-ref)
@@ -187,7 +187,7 @@
 
 (def-encoding :invokestatic #xB8
   (destructuring-bind (class-name name type) (rest form)
-    (u2 (pool-index pool (make-field-ref-info class-name name type))))
+    (u2 (pool-index pool (make-method-ref-info class-name name type))))
   (let ((method-ref (aref pool (parse-u2 bytes))))
     (list (method-ref-info-class-name method-ref)
 	  (method-ref-info-name method-ref)
@@ -248,6 +248,11 @@ Both must be zero and are reserved for future use by the JVM.
 	   (#xC0 :checkcast)
 	   (#xC1 :instanceof)))
   (destructuring-bind (code instruction) class-instruction
+    (setf (gethash instruction *bytecode-encoders*)
+	  (lambda (form pool offset)
+	    (declare (ignore offset))
+	    (let ((class-ref (make-class-info (second form))))
+	    (cons code (u2 (pool-index pool class-ref))))))
     (setf (aref *bytecode-decoders* code)
 	  (lambda (bytes pool offset)
 	    (declare (ignore offset))
