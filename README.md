@@ -5,17 +5,17 @@ making it easy to develop low level code for the JVM.
 
 ## Hello World Example
 
-For in-depth information, see the [tutorial](#) and [manual](MANUAL.md).
+For in-depth information, see the [manual](MANUAL.md).
 
 ```
 ;; generate the main method
 (defparameter *main*
-  (make-method-info
+  (jclass:make-method-info
     '(:public :static)
     "main"
     "([Ljava/lang/String;)V" ; void (String[])
     ;; attributes
-    (list (make-code
+    (list (jclass:make-code
             2 ; max stack size of 2
             1 ; max local count of 1
             `((:getstatic "java/lang/System" "out" "Ljava/io/PrintStream;")
@@ -31,8 +31,8 @@ For in-depth information, see the [tutorial](#) and [manual](MANUAL.md).
                         :direction :output
                         :element-type '(unsigned-byte 8))
   (write-sequence
-    (java-class-bytes
-      (make-java-class
+    (jclass:java-class-bytes
+      (jclass:make-java-class
         0 55 ; v55.0 = Java 11
         '(:public)
         "Hello"	; class Hello
@@ -121,9 +121,25 @@ It is up to the user to correctly match class file features.
 
 ## Current Status
 
-jclass is in its still in development. The API is not yet stable.
+jclass is in its still in development. The API is mostly stable, but there
+may be more symbols exported in the future. For that reason, do not `(:use :jclass)`
+in your packages.
 
-### Implemented Structures
+### Planned Feature: Bytecode Offsets
+
+In their raw form, these attributes work with bytecode offsets.
+The bytecode layer makes calculating offsets easy with the `label`
+pseudoinstruction.
+
+- [ ] Code attribute
+- [ ] StackMapTable attribute
+- [ ] LineNumberTable attribute
+- [ ] LocalVariableTable attribute
+- [ ] LocalVariableTypeTable attribute
+- [ ] RuntimeVisibleTypeAnnotations attribute
+- [ ] RuntimeInvisibleTypeAnnotations attribute
+
+### Implemented Structures by JVM Spec Section
 
 - [X] 4.1 The ClassFile Structure
 - [X] 4.4 The Constant Pool
@@ -176,20 +192,6 @@ jclass is in its still in development. The API is not yet stable.
     - [X] Extended (6 / 6)
     - [X] Reserved (3 / 3)
 
-### Verification Layer
-
-In their raw form, these attributes work with bytecode offsets.
-The bytecode layer makes calculating offsets easy with the `label`
-pseudoinstruction.
-
-- [ ] Code attribute
-- [ ] StackMapTable attribute
-- [ ] LineNumberTable attribute
-- [ ] LocalVariableTable attribute
-- [ ] LocalVariableTypeTable attribute
-- [ ] RuntimeVisibleTypeAnnotations attribute
-- [ ] RuntimeInvisibleTypeAnnotations attribute
-
 ## Library Design
 
 jclass is based off of the Java Virtual Machine Specification, and not the
@@ -210,7 +212,6 @@ jclass is built up in these layers:
 - `structures.lisp`: defines class, field, method, and attribute structures and
 how they are (de)serialized
 - `bytecode.lisp`: (dis)assembles bytecode
-- `verification.lisp`: abstracts over bytecode offsets with labels
 
 ## License
 

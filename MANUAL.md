@@ -1,7 +1,7 @@
 # jclass Manual
 
 This file is intended to serve as a reference and not a starting point.
-I recommend reading the [tutorial](TUTORIAL.md) and the
+I recommend reading the
 [Java Virtual Machine Specification](https://docs.oracle.com/javase/specs/index.html)
 first.
 
