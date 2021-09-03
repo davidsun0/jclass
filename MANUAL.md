@@ -53,7 +53,8 @@ Assembles the `java-class` structure into a list of bytes representing its class
 
 A `constant-pool` structure is used to generate the class file. There is no
 need to provide a pool structure unless you need fine-grained control over the
-order or number of constants in the pool.
+order or number of constants in the pool. The `constant-pool` structure and its
+associated functions are not exported.
 
 ---
 
@@ -87,11 +88,11 @@ For example, it is possible to create a class that extends and interface or
 implements a class. On the other hand, jclass *will* signal an error for
 issues like an invalid annotation value, which prevents further parsing.
 
-Fun trivia: You can annotate method, fields, etc. with classes that don't
-implement `java.lang.annotations.Annotation`! In fact, you can annotate things
-with pretty much anything - integer literals, strings, you name it. OpenJDK's
-HotSpot gladly accepts and runs these classes. Trying to read the annotation
-with reflection does throw a `java.lang.annotation.AnnotationFormatError` though.
+> Fun trivia: You can annotate method, fields, etc. with classes that don't
+> implement `java.lang.annotations.Annotation`! In fact, you can annotate things
+> with pretty much anything - integer literals, strings, you name it. OpenJDK's
+> HotSpot gladly accepts and runs these classes. Trying to read the annotation
+> with reflection does throw a `java.lang.annotation.AnnotationFormatError` though.
 
 Of course, jclass will not signal a `class-format-error` when generating such
 a malformed class.
@@ -370,31 +371,32 @@ Examples of bytecode instructions:
 
 - *entries*: a list where each element is a stack map frame
 
-Stack Map Frame Formats
+#### Stack Map Frame Formats
 
-| type | format |
-|------|--------|
-| same | `(frame-type)` |
-| same locals 1 stack item | `(frame-type verification)` |
-| same locals 1 stack item extended | `(247 offset verification)` |
-| chop |`(frame-type offset)` |
-| same extended | `(251 offset)` |
-| append frame | `(frame-type offset &rest verifications)` |
-| full frame | `(255 offset locals stack-items)` |
+| type                              | format                                    |
+|-----------------------------------|-------------------------------------------|
+| same                              | `(frame-type)`                            |
+| same locals 1 stack item          | `(frame-type verification)`               |
+| same locals 1 stack item extended | `(247 offset verification)`               |
+| chop                              | `(frame-type offset)`                     |
+| same extended                     | `(251 offset)`                            |
+| append frame                      | `(frame-type offset &rest verifications)` |
+| full frame                        | `(255 offset locals stack-items)`         |
     
 - `locals` and `stack-items` are lists of verification type infos.
 
-Verification Type Info Formats
+#### Verification Type Info Formats
 
-| type | format |
-| top | `(0)` |
-| integer | `(1)` |
-| float | `(2)` |
-| null | `(5)` |
-| uninitialized this | `(6)` |
-| object | `(7 class-name)` |
-| long | `(4)` |
-| double | `(3)` |
+| type               | format           |
+|--------------------|------------------|
+| top                | `(0)`            |
+| integer            | `(1)`            |
+| float              | `(2)`            |
+| null               | `(5)`            |
+| uninitialized this | `(6)`            |
+| object             | `(7 class-name)` |
+| long               | `(4)`            |
+| double             | `(3)`            |
 
 - `class-name` is a string denoting a class name
 
@@ -549,20 +551,20 @@ The Deprecated attribute has no slots.
 
 #### Element Tags And Values
 
-|tag|value|
-|---|-----|
-|#\\B| an 8 bit integer |
-|#\\Z| 0 or 1 |
-|#\\I| a 32 bit integer |
-|#\\S| an 16 bit integer |
-|#\\J| a 64 bit integer |
-|#\\C| a character with a code point of U+FFFF or below |
-|#\\F| a 32 bit integer representing the bits of a 32 bit float |
-|#\\D| a 64 bit integer representing the bits of a 64 bit float |
-|#\\s| a string |
-|#\\e| a list of an enum type and value |
-|#\\@| an annotation |
-|#\\[| a list of element-value-pairs |
+| tag  | value                                                    |
+|------|----------------------------------------------------------|
+| #\\B | an 8 bit integer                                         |
+| #\\Z | 0 or 1                                                   |
+| #\\I | a 32 bit integer                                         |
+| #\\S | an 16 bit integer                                        |
+| #\\J | a 64 bit integer                                         |
+| #\\C | a character with a code point of U+FFFF or below         |
+| #\\F | a 32 bit integer representing the bits of a 32 bit float |
+| #\\D | a 64 bit integer representing the bits of a 64 bit float |
+| #\\s | a string                                                 |
+| #\\e | a list of an enum type and value                         |
+| #\\@ | an annotation                                            |
+| #\\[ | a list of element-value-pairs                            |
 
 [Structure] *runtime-visible-annotations* \
 [Structure] *runtime-invisible-annotations* \
@@ -626,18 +628,18 @@ type element-value-pairs => type-annotation \
 - *element-value-pairs*: a list where each element has the form `(tag value)`
     - See [Element Tags and Values](#element-tags-and-values)
 
-| target type | target info |
-|-------------|-------------|
-| type parameter | an 8 bit integer |
-| supertype | a 16 bit integer |
-| type parameter bound | a list of two 8 bit integers |
-| empty | ignored |
-| formal parameter | an 8 bit integer |
-| throws | a 16 bit integer |
-| localvar | a table - see below |
-| catch | a 16 bit integer |
-| offset | a 16 bit integer |
-| type argument | a list of a 16 bit integer and an 8 bit integer |
+| target type          | target info                                     |
+|----------------------|-------------------------------------------------|
+| type parameter       | an 8 bit integer                                |
+| supertype            | a 16 bit integer                                |
+| type parameter bound | a list of two 8 bit integers                    |
+| empty                | ignored                                         |
+| formal parameter     | an 8 bit integer                                |
+| throws               | a 16 bit integer                                |
+| localvar             | a table - see below                             |
+| catch                | a 16 bit integer                                |
+| offset               | a 16 bit integer                                |
+| type argument        | a list of a 16 bit integer and an 8 bit integer |
 
 - *localvar table* is a list where each element has the form `(start-pc length index)`
     - *start-pc*: an integer offset in the bytecode array
