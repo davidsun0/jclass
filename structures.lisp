@@ -295,7 +295,7 @@
 		   (,(symbol-concatenate 'make- name) ,@slots))))))))
 
 (def-attribute constant-value "ConstantValue" (value)
-  (u2 (utf8-info value)))
+  (u2 (pool-index value)))
 
 ;; StackMapTable serialization
 
@@ -371,10 +371,10 @@
 	 (list
 	  type
 	  (u2 offset)
-	  (u2 local-count)
+	  (u2 (length locals))
 	  (loop for l in locals
 		collect (verification-bytes l constant-pool))
-	  (u2 stack-count)
+	  (u2 (length stacks))
 	  (loop for s in stacks
 		collect (verification-bytes s constant-pool))))))))
 
@@ -406,13 +406,11 @@
       ((= type 255)
        (list (parse-u2 byte-stream)
 	     (let ((local-count (parse-u2 byte-stream)))
-	       (cons local-count
-		     (loop repeat local-count
-			   collect (parse-verification byte-stream pool-array))))
+	       (loop repeat local-count
+		     collect (parse-verification byte-stream pool-array)))
 	     (let ((stack-count (parse-u2 byte-stream)))
-	       (cons stack-count
-		     (loop repeat stack-count
-			   collect (parse-verification byte-stream pool-array))))))
+	       (loop repeat stack-count
+		     collect (parse-verification byte-stream pool-array)))))
       (t
        (error 'class-format-error
 	      :message (format nil "Invalid StackMapFrame type ~A" type))))))
@@ -654,8 +652,8 @@
   (def-serialization target-info (type info) byte-stream
     `(target-bytes ,type ,info)
     `(let ((target (parse-target ,byte-stream)))
-       (setf ,type (first target))
-       ,info (rest target)))
+       (setf ,type (first target)
+	     ,info (rest target))))
 
   (def-jstruct type-path (paths)
     (with-length u1 paths (kind argument-index)
@@ -670,7 +668,7 @@
       (target-type target-info target-path type element-value-pairs)
     (target-info target-type target-info)
     (type-path target-path)
-    (u2 type)
+    (u2 (utf8-info type))
     (with-length u2 element-value-pairs (name tag value)
       (u2 (utf8-info name))
       (element-value tag value)))

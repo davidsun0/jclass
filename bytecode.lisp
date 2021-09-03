@@ -365,23 +365,17 @@ Both must be zero and are reserved for future use by the JVM.
 
 (defun decode-bytecode (code-bytes constant-pool)
   (let ((bytecode-length (parse-u4 code-bytes))
-	(start-index (class-bytes-index code-bytes))
-	(offset 0)
-	(output '()))
-    (loop do (setf offset (- (class-bytes-index code-bytes) start-index))
-	  while (< (- (class-bytes-index code-bytes) start-index)
-		   bytecode-length)
-	  do (let* ((opcode (parse-u1 code-bytes))
-		    (decoder (aref *bytecode-decoders* opcode)))
-	       (cond
-		 ((keywordp decoder)
-		  (push decoder output))
-		 ((functionp decoder)
-		  (let ((opcode (funcall decoder code-bytes constant-pool offset)))
-		    (push opcode output)))
-		 (t (error 'class-format-error
-			   :message (format nil "Unknown instruction ~A" opcode))))))
-    (nreverse output)))
+	(start-index (class-bytes-index code-bytes)))
+    (loop for offset = (- (class-bytes-index code-bytes) start-index)
+	  while (< offset bytecode-length)
+	  collect (let* ((opcode (parse-u1 code-bytes))
+			 (decoder (aref *bytecode-decoders* opcode)))
+		    (cond
+		      ((keywordp decoder) decoder)
+		      ((functionp decoder)
+		       (funcall decoder code-bytes constant-pool offset))
+		      (t (error 'class-format-error
+				:message (format nil "Unknown instruction ~A" opcode))))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (def-serialization bytecode (instructions) byte-stream
