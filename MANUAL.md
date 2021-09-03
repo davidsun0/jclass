@@ -138,7 +138,6 @@ Returns true if *object* is of type *field-info*; otherwise, returns false.
 
 Returns true if *object* is of type *method-info*; otherwise, returns false.
 
-
 ## Constants
 
 These structures represent the values of the class file constant pool.
@@ -165,13 +164,14 @@ Places where constant type is ambiguous:
 - `invokespecial` takes a `Methodref_info` or a `InterfaceMethodref_info`
 constant
 - The ConstantValue attribute may take one of several constants.
-    - See the JVM Spec Table 4.7.2-A for details
+    - See the JVM Spec, Table 4.7.2-A for details
+- Several attributes can take multiple constant types
 
 ### Optional Constants
 
 Sometimes a constant is optional and a constant pool index may be zero
 (remember that constant pool indices start at 1).
-jclass will output a zero if the supplied value is NIL.
+jclass will output a zero if the supplied value is `nil`.
 
 ### Constant Pool Functions
 
@@ -318,12 +318,17 @@ All accessors are `setf`-able.
 Anonymous inner structures are represented by a list containing the values in
 order.
 
+### Constant Value Attribute
+
 [Structure] *constant-value*
 
 [Function] **make-constant-value** value => constant-value \
-[Accessor] **constant-value-value** constant-value => value
+[Accessor] **constant-value-value** constant-value => value \
+[Function] **constant-value-p** object => boolean
 
 - *value*: an integer-info, float-info, long-info, double-info, or string-info
+
+### Code Attribute
 
 [Structure] *code*
 
@@ -332,13 +337,14 @@ order.
 [Accessor] **code-max-stack** code => max-stack \
 [Accessor] **code-max-locals** code => max-locals \
 [Accessor] **code-bytecode** code => bytecode \
-[Accessor] **code-exceptions** code => exceptions
+[Accessor] **code-exceptions** code => exceptions \
+[Function] **code-p** object => boolean
 
 - *max-stack*: a 16-bit integer - the max stack size used
 - *max-locals*: a 16 bit integer - the max number of locals used
 - *bytecodes*: a list of bytecode instructions or an array of raw bytes
 - *exceptions*: a list of exception table entries
-    - each entry is a list with the format `(start-pc end-pc handler-pc catch-type)`
+    - each entry is a list with the form `(start-pc end-pc handler-pc catch-type)`
     - `start-pc`, `end-pc`, `handler-pc` are 16 bit integers
     - `catch-type` is a string that names a class or nil to catch all exceptions
 - *attributes*: a list of attributes
@@ -354,47 +360,63 @@ Examples of bytecode instructions:
     - Padding is automatically calculated
 - `wide`: `(:wide :iinc 300 500)` `(:wide :fstore 300)`
 
+### Stack Map Table Attribute
+
 [Structure] *stack-map-table*
 
 [Function] **make-stack-map-table** entries => stack-map-table \
-[Accessor] **stack-map-table-entries** stack-map-table => entries
+[Accessor] **stack-map-table-entries** stack-map-table => entries \
+[Function] **stack-map-table-p** object => boolean
 
 - *entries*: a list where each element is a stack map frame
 
 Stack Map Frame Formats
-- same: `(frame-type)`
-- same locals 1 stack item: `(frame-type verification)`
-- same locals 1 stack item extended: `(247 offset verification)`
-- chop: `(frame-type offset)`
-- same extended: `(251 offset)`
-- append frame: `(frame-type offset &rest verifications)`
-- full frame `(255 offset locals stack-items)`
-    - `locals` and `stack-items` are lists of verification type infos.
+
+| type | format |
+|------|--------|
+| same | `(frame-type)` |
+| same locals 1 stack item | `(frame-type verification)` |
+| same locals 1 stack item extended | `(247 offset verification)` |
+| chop |`(frame-type offset)` |
+| same extended | `(251 offset)` |
+| append frame | `(frame-type offset &rest verifications)` |
+| full frame | `(255 offset locals stack-items)` |
+    
+- `locals` and `stack-items` are lists of verification type infos.
 
 Verification Type Info Formats
-- top: `(0)`
-- integer: `(1)`
-- float: `(2)`
-- null: `(5)`
-- uninitialized this: `(6)`
-- object: `(7 class-name)`
-    - `class-name` is a string denoting a class name
-- long: `(4)`
-- double: `(3)`
+
+| type | format |
+| top | `(0)` |
+| integer | `(1)` |
+| float | `(2)` |
+| null | `(5)` |
+| uninitialized this | `(6)` |
+| object | `(7 class-name)` |
+| long | `(4)` |
+| double | `(3)` |
+
+- `class-name` is a string denoting a class name
+
+### Exceptions Attribute
 
 [Structure] *exceptions*
 
 [Function] **make-exceptions** exception-list => exceptions \
-[Accessor] **exceptions-exceptions** exceptions => exception-list
+[Accessor] **exceptions-exceptions** exceptions => exception-list \
+[Function] **exceptions-p** object => boolean
 
 - *exception-list*: a list of strings, each denoting a class name
+
+### Inner Classes Attribute
 
 [Structure] *inner-classes*
 
 [Function] **make-inner-classes** classes => inner-classes \
-[Accessor] **inner-classes-classes** inner-classes => classes
+[Accessor] **inner-classes-classes** inner-classes => classes \
+[Function] **inner-classes-p** object => boolean
 
-- *classes*: a list where each element is a list with the format
+- *classes*: a list where each element is a list with the form
 `(inner outer name access)`
     - *inner*: a string denoting an inner class name
     - *outer*: a string denoting an outer class name
@@ -402,63 +424,84 @@ Verification Type Info Formats
     - *access*: a list of keywords from this set: `:public :private :protected
 :static :final :interface :abstract :synthetic :annotation :enum`
 
+### Enclosing Method Attribute
+
 [Structure] *enclosing-method*
 
 [Function] **make-enclosing-method** class name type => enclosing-method \
 [Accessor] **enclosing-method-class** enclosing-method => class \
 [Accessor] **enclosing-method-name** enclosing-method => name \
-[Accessor] **enclosing-method-type** enclosing-method => type
+[Accessor] **enclosing-method-type** enclosing-method => type \
+[Function] **enclosing-method-p** object => boolean
 
 - *class*: a string denoting a class name
 - *name*: a string denoting a method name
 - *type*: a string denoting a type descriptor
 
+### Synthetic Attribute
+
 [Structure] *synthetic*
 
-[Function] **make-synthetic** => synthetic-attribute
+[Function] **make-synthetic** => synthetic-attribute \
+[Function] **synthetic-p** object => boolean
 
 The Synthetic attribute has no slots.
+
+### Signature Attribute
 
 [Structure] *signature*
 
 [Function] **make-signature** signature-string => signature \
-[Accessor] **signature-signatrue** signature => signature-string
+[Accessor] **signature-signature** signature => signature-string \
+[Function] **signature-p** object => boolean
 
 - *signature*: a string denoting a class signature
 
 See the JVM Spec 4.7.9.1 for signature formats.
 
+### Source File Attribute
+
 [Structure] *source-file*
 
 [Function] **make-source-file** name => source-file \
-[Accessor] **source-file-name** source-file => name
+[Accessor] **source-file-name** source-file => name \
+[Function] **source-file-p** object => boolean
 
 - *name*: a string denoting a file name
+
+### Source Debug Extension Attribute
 
 [Structure] *source-debug-extension*
 
 [Function] **make-source-debug-extension** debug => source-debug-extension \
-[Accessor] **source-debug-extension** source-debug-extension => debug
+[Accessor] **source-debug-extension-debug** source-debug-extension => debug \
+[Function] **source-debug-extension-p** object => boolean
 
 - *debug*: an `(array (unsigned-byte 8) (*))` containing binary data
 
-The format of *debug* is not specified by the Java Virtual Machine.
+The binary format of *debug* is not specified by the Java Virtual Machine.
+
+### Line Number Table Attribute
 
 [Structure] *line-number-table*
 
 [Function] **make-line-number-table** line-numbers => line-number-table \
-[Accessor] **line-number-table-line-numbers** line-number-table => line-numbers
+[Accessor] **line-number-table-line-numbers** line-number-table => line-numbers \
+[Function] **line-number-table-p** object => boolean
 
-- *line-numbers*: a list where each element has the format `(start-pc line-number)`
+- *line-numbers*: a list where each element has the form `(start-pc line-number)`
     - *start-pc*: an integer denoting the bytecode index
     - *line-number*: the line number corresponding to start-pc in the source file
+
+### Local Variable Table Attribute
 
 [Structure] *local-variable-table*
 
 [Function] **make-local-variable-table** local-variables => local-variable-table \
-[Accessor] **local-variable-table-local-variables** local-variable-table => local-variables
+[Accessor] **local-variable-table-local-variables** local-variable-table => local-variables \
+[Function] **local-variable-table-p** object => boolean
 
-- *local-variables*: a list where each element has the format
+- *local-variables*: a list where each element has the form
 `(start-pc length name descriptor index)`
     - *start-pc*: an integer denoting the bytecode index
     - *length*: an integer denoting the length of bytes
@@ -466,13 +509,16 @@ The format of *debug* is not specified by the Java Virtual Machine.
     - *descriptor*: a field descriptor denoting the type of the local variable
     - *index*: an integer denoting the index in the local variable array of the frame
 
+## Local Variable Type Table Attribute
+
 [Structure] *local-variable-type-table*
 
 [Function] **make-local-variable-type-table** local-variables => local-variable-type-table \
 [Accessor] **local-variable-type-table-local-variables** local-variable-type-table =>
-local-variables
+local-variables \
+[Function] **local-variable-type-table-p** object => boolean
 
-- *local-variables*: a list where each element has the format
+- *local-variables*: a list where each element has the form
 `(start-pc length name descriptor index)`
     - *start-pc*: an integer denoting the bytecode index
     - *length*: an integer denoting the length of bytes
@@ -480,9 +526,12 @@ local-variables
     - *signature*: a field signature denoting the type of the local variable
     - *index*: an integer denoting the index in the local variable array of the frame
 
+### Deprecated Attribute
+
 [Structure] *deprecated*
 
 [Function] **make-deprecated** => deprecated-attribute
+[Function] **deprecated-p** object => boolean
 
 The Deprecated attribute has no slots.
 
@@ -492,10 +541,11 @@ The Deprecated attribute has no slots.
 
 [Function] **make-annotation** type element-value-pairs => annotation \
 [Accessor] **annotation-type** annotation => type \
-[Accessor] **annotation-element-value-pairs** annotation => element-value-pairs
+[Accessor] **annotation-element-value-pairs** annotation => element-value-pairs \
+[Function] **annotation-p** object => boolean
 
 - *type*: a string denoting a field descriptor
-- *element-value-pairs*: a list where each element has the format `(tag value)`
+- *element-value-pairs*: a list where each element has the form `(tag value)`
 
 #### Element Tags And Values
 
@@ -532,10 +582,15 @@ annotations => runtime-visible-parameter-annotations
 runtime-visible-annotations => annotations \
 [Accessor] **runtime-invisible-annotations-annotations**
 runtime-invisible-annotations => annotations \
-[Accessor] **runtime-invisible-annotations-annotations**
-runtime-visible-parameter-annotations => annotations \
-[Accessor] **runtime-invisible-annotations-annotations**
+[Accessor] **runtime-visible-parameter-annotations-annotations**
+runtime-visible-parameter-parameter-annotations => annotations \
+[Accessor] **runtime-invisible-parameter-annotations-annotations**
 runtime-invisible-parameter-annotations => annotations
+
+[Function] **runtime-visible-annotations-p** object => boolean \
+[Function] **runtime-invisible-annotations-p** object => boolean \
+[Function] **runtime-visible-parameter-annotations-p** object => boolean \
+[Function] **runtime-invisible-parameter-annotations-p** object => boolean
 
 - *annotations*: a list of annotations
 
@@ -544,9 +599,10 @@ runtime-invisible-parameter-annotations => annotations
 [Structure] *type-path*
 
 [Function] **make-type-path** paths => type-path \
-[Accessor] **type-path-paths** type-path => paths
+[Accessor] **type-path-paths** type-path => paths \
+[Function] **type-path-p** object => boolean
 
-- *paths*: a list where each element has the format `(kind argument-index)`
+- *paths*: a list where each element has the form `(kind argument-index)`
     - *kind*: an integer
     - *argument-index*: an integer
 
@@ -560,13 +616,14 @@ type element-value-pairs => type-annotation \
 [Accessor] **type-annotation-target-info** type-annotation => target-info \
 [Accessor] **type-annotation-target-path** type-annotation => target-path\
 [Accessor] **type-annotation-type** type-annotation => type \
-[Accessor] **type-annotation-element-value-pairs** type-annotation => element-value-pairs
+[Accessor] **type-annotation-element-value-pairs** type-annotation => element-value-pairs \
+[Function] **type-annotation-p** object => boolean
 
 - *target-type*: an integer - See the JVM Spec tables 4.7.20-A, B, and C
 - *target-info*: a target info
 - *target-path*: a type path
 - *type*: a string denoting a field descriptor
-- *element-value-pairs*: a list where each element has the format `(tag value)`
+- *element-value-pairs*: a list where each element has the form `(tag value)`
     - See [Element Tags and Values](#element-tags-and-values)
 
 | target type | target info |
@@ -582,7 +639,7 @@ type element-value-pairs => type-annotation \
 | offset | a 16 bit integer |
 | type argument | a list of a 16 bit integer and an 8 bit integer |
 
-- *localvar table* is a list where each element has the format `(start-pc length index)`
+- *localvar table* is a list where each element has the form `(start-pc length index)`
     - *start-pc*: an integer offset in the bytecode array
     - *length*: an integer length of bytecode
     - *index*: an integer index inthe local variable array
@@ -590,7 +647,7 @@ type element-value-pairs => type-annotation \
 See the JVM Spec 4.7.20.1 for target info semantics
 
 [Structure] *runtime-visible-type-annotaitons* \
-[Structure] *runtime-invisible-type-annotaitons*
+[Structure] *runtime-invisible-type-annotations*
 
 [Function] **make-runtime-visible-type-annotations** type-annotations =>
 runtime-visible-type-annotations \
@@ -600,24 +657,31 @@ runtime-invisible-type-annotations
 [Accessor] **runtime-visible-type-annotations-annotations**
 runtime-visible-type-annotations => type-annotations \
 [Accessor] **runtime-invisible-type-annotations-annotations**
-runtime-invisible-type-annotations => type-annotations \
+runtime-invisible-type-annotations => type-annotations
+
+[Function] **runtime-visible-type-annotations-p** object => boolean \
+[Function] **runtime-invisible-type-annotations-p** object => boolean
 
 - *type-annotations*: a list of type annotations
 
----
+### Annotation Default Attribute
 
 [Structure] *annotation-default*
 
 [Function] **make-annotation-default** tag value => annotation default \
 [Accessor] **annotation-default-tag** annotation-default => tag \
-[Accessor] **annotation-default-value** annotation-default => value
+[Accessor] **annotation-default-value** annotation-default => value \
+[Function] **annotation-default-p** object => boolean
 
 - *tag*, *value*: an [element tag and value](#element-tags-and-values)
+
+### Bootstrap Methods Attribute
 
 [Structure] *bootstrap-methods*
 
 [Function] **make-bootstrap-methods** methods => bootstrap-methods \
-[Accessor] **bootstrap-methods-methods** bootstrap-methods => methods
+[Accessor] **bootstrap-methods-methods** bootstrap-methods => methods \
+[Function] **bootstrap-methods-p** object => boolean
 
 - *methods*: a list where each entry has the form `(kind reference arguments)`
     - *kind*: an integer between 1 and 9, inclusive
@@ -626,14 +690,19 @@ runtime-invisible-type-annotations => type-annotations \
 
 See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 
+### Method Parameters Attribute
+
 [Structure] *method-parameters*
 
 [Function] **make-method-parameters** parameters => method-parameters \
-[Accessor] **method-parameters-parameters** method-parameters => paramters
+[Accessor] **method-parameters-parameters** method-parameters => paramters \
+[Function] **method-parameters-p** object => boolean
 
 - *parameters*: a list where each entry has the form `(name access-flags)`
     - *name*: a string denoting a parameter's unqualified name
     - *access-flags*: a list of keywords from the set `:final :synthetic :mandated`
+
+### Module Attribute
 
 [Structure] *module*
 
@@ -645,63 +714,79 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 [Accessor] **module-exports** module => exports \
 [Accessor] **module-opens** module => opens \
 [Accessor] **module-uses** module => uses \
-[Accessor] **module-provides** module => provides
+[Accessor] **module-provides** module => provides \
+[Function] **module-p** object => boolean
 
 - *name*: a string denoting the module name
 - *flags*: a list of keywords from the set `:open :synthetic :mandated`
 - *version*: a string denoting the module version
-- *requires*: a list where each element has the format `(module flags version)`
+- *requires*: a list where each element has the form `(module flags version)`
     - *module*: a string denoting the required module name
     - *flags*: a list of keywords from the set `:transitive :static-phase :synthetic :mandated`
     - *version*: a string denoting the required module version
-- *exports*: a list where each element has the format `(package flags exports-to)`
+- *exports*: a list where each element has the form `(package flags exports-to)`
     - *package*: a package name
     - *flags*: a list of keywords from the set `:synthetic :mandated`
     - *exports-to*: a list of strings denoting module names
-- *opens*:  a list where each element has the format `(package flags opens-to)`
+- *opens*:  a list where each element has the form `(package flags opens-to)`
     - *package*: a package name
     - *flags*: a list of keywords from the set `:synthetic :mandated`
     - *opens-to*: a list of strings denoting module names
 - *uses*: a list of strings denoting class names
-- *provides*: a list where each element has the format `(name provides-with)`
+- *provides*: a list where each element has the form `(name provides-with)`
     - *name*: a string denoting a class name
     - *provides-with*: a list of strings denoting class names
+
+### Module Packages Attribute
 
 [Structure] *module-pacakges*
 
 [Function] **make-module-packages** packages => module-packages \
-[Accessor] **module-packages-packages** module-packages => packages
+[Accessor] **module-packages-packages** module-packages => packages \
+[Function] **module-packages-p** object => boolean
 
 - *packages*: a list of strings denoting package names
+
+### Module Main Class Attribute
 
 [Structure] *module-main-class* main-class
 
 [Function] **make-module-main-class** main-class => module-main-class \
-[Accessor] **module-main-class-main-class** module-main-class => main-class
+[Accessor] **module-main-class-main-class** module-main-class => main-class \
+[Function] **module-main-class-p** object => boolean
 
 - *main-class*: a string denoting a class name
+
+### Nest Host Attribute
 
 [Structure] *nest-host*
 
 [Function] **make-nest-host** classes => nest-host \
-[Accessor] **nest-host-classes** nest-host => classes
+[Accessor] **nest-host-classes** nest-host => classes \
+[Function] **nest-host-p** object => boolean
 
 - *classes*: a list of strings denoting class names
+
+### Record Attribute
 
 [Structure] *record*
 
 [Function] **make-record** components => record \
-[Accessor] **record-components** record => components
+[Accessor] **record-components** record => components \
+[Function] **record-p** object => boolean
 
 - *components*: a list where each entry has the form `(name descriptor attributes)`
     - *name*: a string denoting the component name
     - *descriptor*: a string denoting a field descriptor
     - *attributes*: a list of attributes
 
+### Permitted Subclasses Attribute
+
 [Structure] *permitted-subclasses*
 
 [Function] **make-permitted-subclasses** classes => permitted-subclasses \
 [Accessor] **permitted-subclasses-classes** permitted-subclasses => classes
+[Function] **permitted-subclasses-p** object => boolean
 
 - *classes*: a list of strings denoting class names
 
