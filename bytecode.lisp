@@ -341,7 +341,10 @@ Both must be zero and are reserved for future use by the JVM.
   (u4 (second form))
   (parse-u4 bytes))
 
-(defun encode-bytecode (instructions constant-pool)
+(defgeneric encode-bytecode (instructions constant-pool)
+  (:documentation "Encodes a list of bytecode instructions using the constant pool."))
+
+(defmethod encode-bytecode ((instructions cons) constant-pool)
   (let ((offset 0)
 	(output '()))
     (loop for instruction in instructions do
@@ -360,8 +363,10 @@ Both must be zero and are reserved for future use by the JVM.
 	   (push encoder output))
 	  (t (error 'class-format-error
 		    :message (format nil "Unknown instruction ~A" instruction))))))
-    (list (u4 offset)
-	  (nreverse output))))
+    (nreverse output)))
+
+(defmethod encode-bytecode ((instructions array) constant-pool)
+  (coerce instructions 'list))
 
 (defun decode-bytecode (code-bytes constant-pool)
   (let ((bytecode-length (parse-u4 code-bytes))
@@ -379,7 +384,8 @@ Both must be zero and are reserved for future use by the JVM.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (def-serialization bytecode (instructions) byte-stream
-    `(encode-bytecode ,instructions (constant-pool))
+    `(let ((bytes (flatten (encode-bytecode ,instructions (constant-pool)))))
+       (list (u4 (length bytes)) bytes))
     `(setf ,instructions (decode-bytecode ,byte-stream (pool-array)))))
 
 (def-attribute code "Code" (max-stack max-locals bytecode exceptions attributes)
