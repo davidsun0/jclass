@@ -300,33 +300,41 @@
 ;; StackMapTable serialization
 
 (defun verification-bytes (verification constant-pool)
-  (let ((tag (first verification)))
-    (cond
-      ;; top, int, float, long, null, uninitialized_this
-      ((<= 0 tag 6) tag)
-      ;; variable
-      ((= tag 7)
-       (let* ((class-name (second verification))
-	      (class-info (make-class-info class-name))
-	      (index (pool-index constant-pool class-info)))
-	 (list tag (u2 index))))
-      ;; uninitialized_variable
-      ((= tag 8)
-       (let ((offset (second verification)))
-	 (list tag (u2 offset))))
-      (t (error 'class-format-error
-		:message (format nil "Invalid verification_type_info tag ~A" tag))))))
+  (cond
+    ((eq verification :top)     0)
+    ((eq verification :integer) 1)
+    ((eq verification :float)   2)
+    ((eq verification :long)    3)
+    ((eq verification :double)  4)
+    ((eq verification :null)    5)
+    ((eq verification :uninitialized-this) 6)
+    ((stringp verification)
+     ;; object
+     (let* ((class-info (make-class-info verification))
+	    (index (pool-index constant-pool class-info)))
+       (cons 7 (u2 index))))
+    ((integerp verification)
+     ;; uninitialized variable
+     (cons 8 (u2 verification)))
+    (t (error 'class-format-error
+	      :message (format nil "Invalid verification info ~A" verification)))))
 
 (defun parse-verification (byte-stream pool-array)
   (let ((tag (parse-u1 byte-stream)))
-    (cond
-      ((<= 0 tag 6) (list tag))
-      ((= tag 7)
-       (list tag (class-info-name (aref pool-array (parse-u2 byte-stream)))))
-      ((= tag 8)
-       (list tag (parse-u2 byte-stream)))
+    (case tag
+      ((0) :top)
+      ((1) :integer)
+      ((2) :float)
+      ((3) :long)
+      ((4) :double)
+      ((5) :null)
+      ((6) :uninitialized-this)
+      ((7) (let* ((index (parse-u2 byte-stream))
+		  (class-info (aref pool-array index)))
+	     (class-info-name class-info)))
+      ((8) (parse-u2 byte-stream))
       (t (error 'class-format-error
-		:message (format nil "Invalid verification_type_info tag ~A" tag))))))
+		:message (format nil "Unknown verification_type_info tag ~A" tag))))))
 
 (defun stack-map-frame-bytes (frame constant-pool)
   (let ((type (first frame)))

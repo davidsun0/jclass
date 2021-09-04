@@ -385,20 +385,22 @@ Examples of bytecode instructions:
     
 - `locals` and `stack-items` are lists of verification type infos.
 
-#### Verification Type Info Formats
+#### Verification Type Info
 
-| type               | format           |
-|--------------------|------------------|
-| top                | `(0)`            |
-| integer            | `(1)`            |
-| float              | `(2)`            |
-| null               | `(5)`            |
-| uninitialized this | `(6)`            |
-| object             | `(7 class-name)` |
-| long               | `(4)`            |
-| double             | `(3)`            |
+| type               | format                |
+|--------------------|-----------------------|
+| top                | `:top`                |
+| integer            | `:integer`            |
+| float              | `:float`              |
+| null               | `:null`               |
+| uninitialized this | `:uninitialized-this` |
+| object             | `class-name`          |
+| uninitialized      | `offset`              |
+| long               | `:long`               |
+| double             | `:double`             |
 
 - `class-name` is a string denoting a class name
+- `offset` is a 16 bit bytecode offset
 
 ### Exceptions Attribute
 
@@ -551,20 +553,20 @@ The Deprecated attribute has no slots.
 
 #### Element Tags And Values
 
-| tag  | value                                                    |
-|------|----------------------------------------------------------|
-| #\\B | an 8 bit integer                                         |
-| #\\Z | 0 or 1                                                   |
-| #\\I | a 32 bit integer                                         |
-| #\\S | an 16 bit integer                                        |
-| #\\J | a 64 bit integer                                         |
-| #\\C | a character with a code point of U+FFFF or below         |
-| #\\F | a 32 bit integer representing the bits of a 32 bit float |
-| #\\D | a 64 bit integer representing the bits of a 64 bit float |
-| #\\s | a string                                                 |
-| #\\e | a list of an enum type and value                         |
-| #\\@ | an annotation                                            |
-| #\\[ | a list of element-value-pairs                            |
+| type   | tag  | value                                                    |
+|--------|------|----------------------------------------------------------|
+| byte   | #\\B | an 8 bit integer                                         |
+| char   | #\\C | a character with a code point of U+FFFF or below         |
+| double | #\\D | a 64 bit integer representing the bits of a 64 bit float |
+| float  | #\\F | a 32 bit integer representing the bits of a 32 bit float |
+| int    | #\\I | a 32 bit integer                                         |
+| long   | #\\J | a 64 bit integer                                         |
+| short  | #\\S | an 16 bit integer                                        |
+| boolean| #\\Z | 0 or 1                                                   |
+| String | #\\s | a string                                                 |
+| Enum   | #\\e | a list of an enum type and value                         |
+| Class  | #\\@ | an annotation                                            |
+| Array  | #\\[ | a list of element-value-pairs                            |
 
 [Structure] *runtime-visible-annotations* \
 [Structure] *runtime-invisible-annotations* \
