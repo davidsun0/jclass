@@ -1,6 +1,7 @@
 (in-package #:jclass)
 
 (defun java-class-bytes (java-class &optional (pool (make-constant-pool)))
+  "Converts a java-class struct into its class file bytes."
   ;; resolve the constants first
   (let ((bytes (byte-list pool java-class)))
     (flatten (list*
@@ -11,6 +12,7 @@
 	      bytes))))
 
 (defun disassemble-jclass (bytes)
+  "Builds a java-class struct from an array of bytes."
   (let* ((cbytes (make-class-bytes :array bytes :index 0))
 	 (magic  (when (/= (parse-u4 cbytes) #xCAFEBABE)
 		   (error 'class-format-error
@@ -26,6 +28,7 @@
     (values jclass pool-array)))
 
 (defun disassemble-file (path)
+  "Builds a java-class struct from a file."
   (with-open-file (stream path
 			  :direction :input
 			  :element-type '(unsigned-byte 8)
