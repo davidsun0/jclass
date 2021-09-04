@@ -3,6 +3,7 @@
 (defsystem "jclass"
   :version "0.1.0"
   :author "David Sun"
+  :license "MIT"
   :description "Java class file manipulation"
   :serial t
   :components ((:file "package")
