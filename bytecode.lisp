@@ -76,20 +76,28 @@
     (setf (gethash instruction *bytecode-encoders*) code)
     (setf (aref *bytecode-decoders* code) instruction)))
 
+(defmacro def-encoding (instruction opcode encoder decoder)
+  `(progn
+     (setf (gethash ,instruction *bytecode-encoders*)
+	   (lambda (operands pool offset)
+	     (declare (ignorable pool offset))
+	     ;; unhygenic: exposes operands, pool, offset
+	     (cons ,opcode ,encoder)))
+     (setf (aref *bytecode-decoders* ,opcode)
+	   (lambda (bytes pool offset)
+	     (declare (ignorable pool offset))
+	     ;; unhygenic: exposes bytes, pool, offset
+	     (cons ,instruction ,decoder)))))
+
 (dolist (u1-instruction
 	 '((#x10 :bipush)
 	   (#x15 :iload)  (#x16 :lload)  (#x17 :fload)  (#x18 :dload)  (#x19 :aload)
 	   (#x36 :istore) (#x37 :lstore) (#x38 :fstore) (#x39 :dstore) (#x3A :astore)
 	   (#xA9 :ret) (#xBC :newarray)))
   (destructuring-bind (code instruction) u1-instruction
-    (setf (gethash instruction *bytecode-encoders*)
-	  (lambda (form pool offset)
-	    (declare (ignore pool offset))
-	    (cons code (u1 (second form)))))
-    (setf (aref *bytecode-decoders* code)
-	  (lambda (bytes pool offset)
-	    (declare (ignore pool offset))
-	    (list instruction (parse-u1 bytes))))))
+    (def-encoding instruction code
+      (u1 (first operands))
+      (list (parse-u1 bytes)))))
     
 (dolist (u2-instruction
 	 '((#x11 :sipush)
@@ -103,44 +111,26 @@
 	   (#xA8 :jsr)
 	   (#xC6 :ifnull) (#xC7 :ifnonnull)))
   (destructuring-bind (code instruction) u2-instruction
-    (setf (gethash instruction *bytecode-encoders*)
-	  (lambda (form pool offset)
-	    (declare (ignore pool offset))
-	    (cons code (u2 (second form)))))
-    (setf (aref *bytecode-decoders* code)
-	  (lambda (bytes pool offset)
-	    (declare (ignore pool offset))
-	    (list instruction (parse-u2 bytes))))))
-
-(defmacro def-encoding (instruction opcode encoder decoder)
-  `(progn
-     (setf (gethash ,instruction *bytecode-encoders*)
-	   (lambda (form pool offset)
-	     (declare (ignorable pool offset))
-	     ;; unhygenic: exposes form, pool, offset
-	     (cons ,opcode ,encoder)))
-     (setf (aref *bytecode-decoders* ,opcode)
-	   (lambda (bytes pool offset)
-	     (declare (ignorable pool offset))
-	     ;; unhygenic: exposes bytes, pool, offset
-	     (cons ,instruction ,decoder)))))
+    (def-encoding instruction code
+      (u2 (first operands))
+      (list (parse-u2 bytes)))))
 
 (def-encoding :ldc #x12
   ;; check for pool index < 256 ?
-  (u1 (pool-index pool (second form)))
+  (u1 (pool-index pool (first operands)))
   (list (aref pool (parse-u1 bytes))))
 
 (def-encoding :ldc_w #x13
-  (u2 (pool-index pool (second form)))
+  (u2 (pool-index pool (first operands)))
   (list (aref pool (parse-u2 bytes))))
 
 (def-encoding :ldc2_w #x14
   ;; check for long / double constant type?
-  (u2 (pool-index pool (second form)))
+  (u2 (pool-index pool (first operands)))
   (list (aref pool (parse-u2 bytes))))
 
 (def-encoding :tableswitch #xAA
-  (destructuring-bind (default low high &rest offsets) (rest form)
+  (destructuring-bind (default low high &rest offsets) operands
     (flatten
      (list
       ;; padding bytes
@@ -163,7 +153,7 @@
 		 collect (parse-u4 bytes)))))
 
 (def-encoding :lookupswitch #xAB
-  (destructuring-bind (default &rest match-offset-pairs) (rest form)
+  (destructuring-bind (default &rest match-offset-pairs) operands
     (flatten
      (list
       ;; padding bytes
@@ -190,24 +180,18 @@
 	   (#xB4 :getfield)
 	   (#xB5 :putfield)))
   (destructuring-bind (code instruction) field-instruction
-    (setf (gethash instruction *bytecode-encoders*)
-	  (lambda (form pool offset)
-	    (declare (ignore offset))
-	    (destructuring-bind (class-name name type) (rest form)
-	      (let* ((field-ref (make-field-ref-info class-name name type))
-		     (field-index (pool-index pool field-ref)))
-		(cons code (u2 field-index))))))
-    (setf (aref *bytecode-decoders* code)
-	  (lambda (bytes pool offset)
-	    (declare (ignore offset))
-	    (let ((field-ref (aref pool (parse-u2 bytes))))
-	      (list instruction
-		    (field-ref-info-class-name field-ref)
-		    (field-ref-info-name field-ref)
-		    (field-ref-info-type field-ref)))))))
+    (def-encoding instruction code
+      (destructuring-bind (class-name name type) operands
+	(let* ((field-ref (make-field-ref-info class-name name type))
+	       (field-index (pool-index pool field-ref)))
+	  (u2 field-index)))
+      (let ((field-ref (aref pool (parse-u2 bytes))))
+	(list (field-ref-info-class-name field-ref)
+	      (field-ref-info-name field-ref)
+	      (field-ref-info-type field-ref))))))
 
 (def-encoding :invokevirtual #xB6
-  (destructuring-bind (class-name name type) (rest form)
+  (destructuring-bind (class-name name type) operands
     (u2 (pool-index pool (make-method-ref-info class-name name type))))
   (let ((method-ref (aref pool (parse-u2 bytes))))
     (list (method-ref-info-class-name method-ref)
@@ -215,13 +199,13 @@
 	  (method-ref-info-type method-ref))))
 
 (def-encoding :invokespecial #xB7
-  (u2 (pool-index pool (second form)))
+  (u2 (pool-index pool (first operands)))
   (let ((method-ref (aref pool (parse-u2 bytes))))
     ;; method-ref may be either a method-ref-info or interface-method-ref-info
     (list method-ref)))
 
 (def-encoding :invokestatic #xB8
-  (destructuring-bind (class-name name type) (rest form)
+  (destructuring-bind (class-name name type) operands
     (u2 (pool-index pool (make-method-ref-info class-name name type))))
   (let ((method-ref (aref pool (parse-u2 bytes))))
     (list (method-ref-info-class-name method-ref)
@@ -243,7 +227,7 @@ The 0 byte is also unused.
 When decoding, we simply ignore the two unused bytes.
 |#
 (def-encoding :invokeinterface #xB9
-  (destructuring-bind (class-name name type) (rest form)
+  (destructuring-bind (class-name name type) operands
     (let* ((method-ref (make-interface-method-ref-info class-name name type))
 	   (index (u2 (pool-index pool method-ref))))
       (append index '(1 0))))
@@ -266,7 +250,7 @@ indexbyte2
 Both must be zero and are reserved for future use by the JVM.
 |#
 (def-encoding :invokedynamic #xBA
-  (destructuring-bind (index name type) (rest form)
+  (destructuring-bind (index name type) operands
     (let* ((dynamic-ref (make-invoke-dynamic-info index name type))
 	   (index (u2 (pool-index pool dynamic-ref))))
       (append index '(0 0))))
@@ -283,16 +267,10 @@ Both must be zero and are reserved for future use by the JVM.
 	   (#xC0 :checkcast)
 	   (#xC1 :instanceof)))
   (destructuring-bind (code instruction) class-instruction
-    (setf (gethash instruction *bytecode-encoders*)
-	  (lambda (form pool offset)
-	    (declare (ignore offset))
-	    (let ((class-ref (make-class-info (second form))))
-	    (cons code (u2 (pool-index pool class-ref))))))
-    (setf (aref *bytecode-decoders* code)
-	  (lambda (bytes pool offset)
-	    (declare (ignore offset))
-	    (list instruction
-		  (class-info-name (aref pool (parse-u2 bytes))))))))
+    (def-encoding instruction code
+      (let ((class-ref (make-class-info (first operands))))
+	(u2 (pool-index pool class-ref)))
+      (list (class-info-name (aref pool (parse-u2 bytes)))))))
 
 (defparameter *wide-instructions*
   '((#x84 :iinc)
@@ -301,16 +279,16 @@ Both must be zero and are reserved for future use by the JVM.
 
 (def-encoding :wide #xC4
   (let ((opcode (loop for (op instruction) in *wide-instructions*
-		      when (eq instruction (second form))
+		      when (eq instruction (first operands))
 			return op)))
      (cond
        ((null opcode)
 	(error 'class-format-error
-		 :message (format nil "Invalid wide instruction ~A" form)))
+		 :message (format nil "Invalid wide instruction ~A" operands)))
        ((= opcode #x84)	; iinc
-	(destructuring-bind (index const) (rest (rest form))
+	(destructuring-bind (index const) (rest operands)
 	  (cons opcode (append (u2 index) (u2 const)))))
-       (t (cons opcode (u2 (third form))))))
+       (t (cons opcode (u2 (second operands))))))
   (let* ((opcode (parse-u1 bytes))
 	 (instruction (loop for (op instruction) in *wide-instructions*
 			    when (= op opcode)
@@ -326,47 +304,90 @@ Both must be zero and are reserved for future use by the JVM.
 		:message (format nil "Unknown wide operand ~A" opcode))))))
 
 (def-encoding :multianewarray #xC5
-  (destructuring-bind (class-name dimensions) (rest form)
+  (destructuring-bind (class-name dimensions) operands
     (let* ((class-ref (make-class-info class-name))
 	   (index (u2 (pool-index pool class-ref))))
-      (append index dimensions)))
-  (cons (class-info-name (aref pool (parse-u2 bytes)))
+      (list index dimensions)))
+  (list (class-info-name (aref pool (parse-u2 bytes)))
 	(parse-u1 bytes)))
 
 (def-encoding :goto_w #xC8
-  (u4 (second form))
-  (parse-u4 bytes))
+  (u4 (first operands))
+  (list (parse-u4 bytes)))
 
 (def-encoding :jsr_w #xC9
-  (u4 (second form))
-  (parse-u4 bytes))
+  (u4 (first operands))
+  (list (parse-u4 bytes)))
 
-(defgeneric encode-bytecode (instructions constant-pool)
-  (:documentation "Encodes a list of bytecode instructions using the constant pool."))
+(defun encode-instruction (instruction constant-pool offset)
+  "Encodes a single bytecode instruction."
+  (let ((encoder (gethash (if (listp instruction)
+			      (first instruction)
+			      instruction)
+			  *bytecode-encoders*)))
+    (cond
+      ((functionp encoder)
+       ;; (rest instruction) removes the instruction name, which is known
+       (funcall encoder (rest instruction) constant-pool offset))
+      ((integerp encoder) encoder)
+      (t (error 'class-format-error
+		:message (format nil "Unknown instruction ~A" instruction))))))
 
-(defmethod encode-bytecode ((instructions cons) constant-pool)
-  (let ((offset 0)
-	(output '()))
-    (loop for instruction in instructions do
-      (let ((encoder (gethash (if (listp instruction)
-				  (first instruction)
-				  instruction)
-			      *bytecode-encoders*)))
-	(cond
-	  ((functionp encoder)
-	   (let ((bytes (funcall encoder instruction constant-pool offset)))
-	     (incf offset (length bytes))
-	     (push bytes output)))
-	  ((integerp encoder)
-	   ;; simple instruction - encoder is the byte value
-	   (incf offset)
-	   (push encoder output))
-	  (t (error 'class-format-error
-		    :message (format nil "Unknown instruction ~A" instruction))))))
-    (nreverse output)))
+(defun instruction-length (instruction constant-pool offset)
+  "Gets the length of an instruction in bytes."
+  (let ((op (first instruction)))
+    (cond
+      ((member op '(:ifeq :ifne :iflt :ifge :ifgt :ifle
+		    :if_icmpeq :if_icmpne
+		    :if_icmplt :if_icmpge
+		    :if_icmpgt :if_icmple
+		    :if_acmpeq :if_acmpne
+		    :goto :jsr
+		    :ifnull :ifnonnull))
+       3) ; 2 byte offset + 1 byte opcode
+      ((member op '(:goto_w :jsr_w))
+       5) ; 4 byte offset + 1 byte opcode
+      ((eq op :tableswitch)
+       (destructuring-bind (default low high &rest offsets) (rest instruction)
+	 ;; let the encoder do the work of calculating padding
+	 (length (encode-instruction
+		  ;; replace label offsets with dummy integer offsets
+		  (list* default low high (loop for offset in offsets
+						collect 0))
+		  constant-pool
+		  offset))))
+      ((eq op :lookupswitch)
+       (destructuring-bind (default &rest match-offset-pairs) (rest instruction)
+	 ;; just like :tableswitch
+	 (length (encode-instruction
+		  (cons default (loop for (key offset) in match-offset-pairs
+				      collect (list key 0)))
+		  constant-pool
+		  offset))))
+      (t (length (encode-instruction instruction constant-pool offset))))))
 
-(defmethod encode-bytecode ((instructions array) constant-pool)
-  (coerce instructions 'list))
+(defun label-offsets (instructions)
+  "Calculates the bytecode offsets for all labels."
+  ;; make a dummy constant pool for use in offset calculation
+  (let ((pool (make-constant-pool))
+	(label-table (make-hash-table :test 'equal)))
+    (loop for instruction in instructions
+	  for offset = 0 then offset
+	  if (eq (first instruction) :label)
+	    do (setf (gethash (second instruction) label-table)
+		     offset)
+	  else
+	    do (incf offset (instruction-length instruction pool offset)))
+    label-table))
+
+(defun encode-bytecode (instructions constant-pool)
+  "Encodes a list of bytecode instructions to a list of bytes."
+  (loop for instruction in instructions
+	for offset = 0 then offset
+	for bytes = (encode-instruction instruction constant-pool offset)
+	do (incf offset (if (integerp bytes) 1 (length bytes)))
+	collect bytes into output
+	finally (return (flatten bytes))))
 
 (defun decode-bytecode (code-bytes constant-pool)
   (let ((bytecode-length (parse-u4 code-bytes))
@@ -384,7 +405,9 @@ Both must be zero and are reserved for future use by the JVM.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (def-serialization bytecode (instructions) byte-stream
-    `(let ((bytes (flatten (encode-bytecode ,instructions (constant-pool)))))
+    `(let ((bytes (if (arrayp ,instructions)
+		      (coerce ,instructions 'list)
+		      (encode-bytecode ,instructions (constant-pool)))))
        (list (u4 (length bytes)) bytes))
     `(setf ,instructions (decode-bytecode ,byte-stream (pool-array)))))
 
