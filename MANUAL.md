@@ -26,18 +26,18 @@ parent interfaces fields methods attributes => java-class
 [Accessor] **java-class-methods** java-class => methods \
 [Accessor] **java-class-attributes** java-class => attributes
 
-- *minor-version*: an integer representing a Java Class minor version
-- *major-version*: an integer representing a Java Class major version
+- *minor-version*: a 16-bit Java Class minor version
+- *major-version*: a 16-bit Java Class major version
 - *flags*: a list of keywords from this set: `:public :final :super :interface
 :abstract :synthetic :annotation :enum :module`
-- *name*: a string of this class's [binary name](#binary-names)
-- *parent*: a string of this class's parent's [binary name](#binary-names)
-- *interfaces*: a list of strings of implemented interface names
+- *name*: this class's [name](#binary-names) string
+- *parent*: this class's parent's name string
+- *interfaces*: a list of implemented interface name strings
 - *fields*: a list of [field](#fields) structures
 - *methods*: a list of [method](#methods) structures
 - *attributes*: a list of [attribute](#attributes) structures
 
-[Function] **java-class-p** object => generalized-boolean
+[Function] **java-class-p** object => boolean
 
 Returns true if *object* is of type *java-class*; otherwise, returns false.
 
@@ -69,8 +69,9 @@ class file.
 
 Disassembles a vector of bytes into a java-class structure.
 
-The 0th indexed item in the constant pool will always be `nil`. Constant pool
-indices start at 1.
+The 0th indexed item in the constant pool will always be `nil`, which represents
+"no constant". Constant pool indices start at 1.
+See [Optional Constants](#optional-constants) for details.
 
 ---
 
@@ -93,9 +94,9 @@ issues like an invalid annotation value, which prevents further parsing.
 > with pretty much anything - integer literals, strings, you name it. OpenJDK's
 > HotSpot gladly accepts and runs these classes. Trying to read the annotation
 > with reflection does throw a `java.lang.annotation.AnnotationFormatError` though.
-
-Of course, jclass will not signal a `class-format-error` when generating such
-a malformed class.
+>
+> Of course, jclass will not signal a `class-format-error` when generating such
+> a malformed class.
 
 ## Fields
 
@@ -110,11 +111,11 @@ a malformed class.
 
 - *flags*: a list of keywords from this set: `:public :private :protected :static
 :final :volatile :transient :synthetic :enum`
-- *name*: a string denoting this field's name
-- *descriptor*: a string of this field's type descriptor
+- *name*: this field's name string
+- *descriptor*: this field's type descriptor string
 - *attributes*: a list of [attribute](#Attributes) structures
 
-[Function] **field-info-p** object => generalized-boolean
+[Function] **field-info-p** object => boolean
 
 Returns true if *object* is of type *field-info*; otherwise, returns false.
 
@@ -131,11 +132,11 @@ Returns true if *object* is of type *field-info*; otherwise, returns false.
 
 - *flags*: a list of keywords from this set: `:public :private :protected :static
 :final :synchronized :bridge :varargs :native :abstract :strict :synthetic`
-- *name*: a string denoting this method's name
-- *descriptor*: a string of this methods's type descriptor
+- *name*: this method's name string
+- *descriptor*: this methods's type descriptor string
 - *attributes*: a list of [attribute](#Attributes) structures
 
-[Function] **method-info-p** object => generalized-boolean
+[Function] **method-info-p** object => boolean
 
 Returns true if *object* is of type *method-info*; otherwise, returns false.
 
@@ -164,9 +165,10 @@ Places where constant type is ambiguous:
 - `ldc2_w` takes a `Long_info` or a `Double_info`
 - `invokespecial` takes a `Methodref_info` or a `InterfaceMethodref_info`
 constant
-- The ConstantValue attribute may take one of several constants.
-    - See the JVM Spec, Table 4.7.2-A for details
-- Several attributes can take multiple constant types
+- Several attributes can take multiple constant types:
+    - The ConstantValue attribute may take one of several constants.
+        - See the JVM Spec, Table 4.7.2-A for details
+    - The BoostrapMethods attribute may take one of several constants.
 
 ### Optional Constants
 
@@ -290,10 +292,9 @@ See the JVM Specification 4.3 for restrictions on descriptors.
 [Accessor] **invoke-dynamic-info-type** dynamic-info => type \
 [Function] **invoke-dynamic-info-p** object => boolean
 
-- *bootstrap-index*: an 8-bit integer representing an index in the class's
-bootstrap-methods attribute
-- *name*: a string representing the name of a field or method
-- *type*: a string representing a type descriptor
+- *bootstrap-index*: an 8-bit integer index in the class's bootstrap-methods attribute
+- *name*: a field or method name string
+- *type*: a type descriptor string
 
 See the JVM Specification 4.4.10 for the semantics of the dynamic info and the
 invoke dynamic info. \
@@ -341,13 +342,13 @@ order.
 [Accessor] **code-exceptions** code => exceptions \
 [Function] **code-p** object => boolean
 
-- *max-stack*: a 16-bit integer - the max stack size used
-- *max-locals*: a 16 bit integer - the max number of locals used
+- *max-stack*: a 16-bit integer for the max stack size used
+- *max-locals*: a 16-bit integer for the max number of locals used
 - *bytecodes*: a list of bytecode instructions or an array of raw bytes
 - *exceptions*: a list of exception table entries
     - each entry is a list with the form `(start-pc end-pc handler-pc catch-type)`
-    - `start-pc`, `end-pc`, `handler-pc` are 16 bit integers
-    - `catch-type` is a string that names a class or nil to catch all exceptions
+    - `start-pc`, `end-pc`, `handler-pc` are 16-bit bytecode offsets
+    - `catch-type` is a class name string or `nil` to catch all exceptions
 - *attributes*: a list of attributes
 
 Examples of bytecode instructions:
@@ -357,9 +358,12 @@ Examples of bytecode instructions:
     - The order of the operands is default, low, high, and then the offsets
     - Padding is automatically calculated
 - `lookupswitch`: `(:lookupswitch 75 (98030 64) (2571410 36) (99162322 50))`
-    - The order of the operands is default and then the match-offset pairs
+    - The order of the operands is `default &rest match-offset-pairs`
+    - Each match-offset pair is `(match offset)`
+    - Match and offset values are 32-bit signed integers
     - Padding is automatically calculated
 - `wide`: `(:wide :iinc 300 500)` `(:wide :fstore 300)`
+- `label` pseudo instruction: `(:label "loop")`
 
 ### Stack Map Table Attribute
 
@@ -383,7 +387,7 @@ Examples of bytecode instructions:
 | append frame                      | `(frame-type offset &rest verifications)` |
 | full frame                        | `(255 offset locals stack-items)`         |
     
-- `locals` and `stack-items` are lists of verification type infos.
+- `locals` and `stack-items` are lists of verification type infos
 
 #### Verification Type Info
 
@@ -399,8 +403,8 @@ Examples of bytecode instructions:
 | long               | `:long`               |
 | double             | `:double`             |
 
-- `class-name` is a string denoting a class name
-- `offset` is a 16 bit bytecode offset
+- `class-name`: a class name string
+- `offset`: a 16-bit bytecode offset
 
 ### Exceptions Attribute
 
@@ -410,7 +414,7 @@ Examples of bytecode instructions:
 [Accessor] **exceptions-exceptions** exceptions => exception-list \
 [Function] **exceptions-p** object => boolean
 
-- *exception-list*: a list of strings, each denoting a class name
+- *exception-list*: a list of class name strings
 
 ### Inner Classes Attribute
 
@@ -420,8 +424,7 @@ Examples of bytecode instructions:
 [Accessor] **inner-classes-classes** inner-classes => classes \
 [Function] **inner-classes-p** object => boolean
 
-- *classes*: a list where each element is a list with the form
-`(inner outer name access)`
+- *classes*: a list where each item has the form `(inner outer name access)`
     - *inner*: a string denoting an inner class name
     - *outer*: a string denoting an outer class name
     - *name*: a string denoting the original simple name, or `nil` if anonymous
@@ -438,9 +441,9 @@ Examples of bytecode instructions:
 [Accessor] **enclosing-method-type** enclosing-method => type \
 [Function] **enclosing-method-p** object => boolean
 
-- *class*: a string denoting a class name
-- *name*: a string denoting a method name
-- *type*: a string denoting a type descriptor
+- *class*: a class name string
+- *name*: method name string
+- *type*: a type descriptor string
 
 ### Synthetic Attribute
 
@@ -459,7 +462,7 @@ The Synthetic attribute has no slots.
 [Accessor] **signature-signature** signature => signature-string \
 [Function] **signature-p** object => boolean
 
-- *signature*: a string denoting a class signature
+- *signature*: a class signature string
 
 See the JVM Spec 4.7.9.1 for signature formats.
 
@@ -471,7 +474,7 @@ See the JVM Spec 4.7.9.1 for signature formats.
 [Accessor] **source-file-name** source-file => name \
 [Function] **source-file-p** object => boolean
 
-- *name*: a string denoting a file name
+- *name*: a file name string
 
 ### Source Debug Extension Attribute
 
@@ -481,7 +484,7 @@ See the JVM Spec 4.7.9.1 for signature formats.
 [Accessor] **source-debug-extension-debug** source-debug-extension => debug \
 [Function] **source-debug-extension-p** object => boolean
 
-- *debug*: an `(array (unsigned-byte 8) (*))` containing binary data
+- *debug*: an array of unsigned bytes
 
 The binary format of *debug* is not specified by the Java Virtual Machine.
 
@@ -505,13 +508,13 @@ The binary format of *debug* is not specified by the Java Virtual Machine.
 [Accessor] **local-variable-table-local-variables** local-variable-table => local-variables \
 [Function] **local-variable-table-p** object => boolean
 
-- *local-variables*: a list where each element has the form
+- *local-variables*: a list where each item has the form
 `(start-pc length name descriptor index)`
-    - *start-pc*: an integer denoting the bytecode index
-    - *length*: an integer denoting the length of bytes
-    - *name*: a string denoting the local variable name
-    - *descriptor*: a field descriptor denoting the type of the local variable
-    - *index*: an integer denoting the index in the local variable array of the frame
+    - *start-pc*: a 16-bit bytecode index
+    - *length*: a 16-bit byte length
+    - *name*: a local variable name string
+    - *descriptor*: the local variable's field descriptor string
+    - *index*: a 16-bit local variable index
 
 ## Local Variable Type Table Attribute
 
@@ -522,13 +525,13 @@ The binary format of *debug* is not specified by the Java Virtual Machine.
 local-variables \
 [Function] **local-variable-type-table-p** object => boolean
 
-- *local-variables*: a list where each element has the form
+- *local-variables*: a list where each item has the form
 `(start-pc length name descriptor index)`
-    - *start-pc*: an integer denoting the bytecode index
-    - *length*: an integer denoting the length of bytes
-    - *name*: a string denoting the local variable name
-    - *signature*: a field signature denoting the type of the local variable
-    - *index*: an integer denoting the index in the local variable array of the frame
+    - *start-pc*: a 16-bit bytecode index
+    - *length*: a 16-bit byte length
+    - *name*: a local variable name string
+    - *descriptor*: the local variable's field signature string
+    - *index*: a 16-bit local variable index
 
 ### Deprecated Attribute
 
@@ -548,20 +551,20 @@ The Deprecated attribute has no slots.
 [Accessor] **annotation-element-value-pairs** annotation => element-value-pairs \
 [Function] **annotation-p** object => boolean
 
-- *type*: a string denoting a field descriptor
+- *type*: a field descriptor string
 - *element-value-pairs*: a list where each element has the form `(tag value)`
 
 #### Element Tags And Values
 
 | type   | tag  | value                                                    |
 |--------|------|----------------------------------------------------------|
-| byte   | #\\B | an 8 bit integer                                         |
+| byte   | #\\B | an 8-bit integer                                         |
 | char   | #\\C | a character with a code point of U+FFFF or below         |
-| double | #\\D | a 64 bit integer representing the bits of a 64 bit float |
-| float  | #\\F | a 32 bit integer representing the bits of a 32 bit float |
-| int    | #\\I | a 32 bit integer                                         |
-| long   | #\\J | a 64 bit integer                                         |
-| short  | #\\S | an 16 bit integer                                        |
+| double | #\\D | a 64-bit integer representing the bits of a 64-bit float |
+| float  | #\\F | a 32-bit integer representing the bits of a 32-bit float |
+| int    | #\\I | a 32-bit integer                                         |
+| long   | #\\J | a 64-bit integer                                         |
+| short  | #\\S | a 16-bit integer                                         |
 | boolean| #\\Z | 0 or 1                                                   |
 | String | #\\s | a string                                                 |
 | Enum   | #\\e | a list of an enum type and value                         |
@@ -606,9 +609,9 @@ runtime-invisible-parameter-annotations => annotations
 [Accessor] **type-path-paths** type-path => paths \
 [Function] **type-path-p** object => boolean
 
-- *paths*: a list where each element has the form `(kind argument-index)`
-    - *kind*: an integer
-    - *argument-index*: an integer
+- *paths*: a list where each item has the form `(kind argument-index)`
+    - *kind*: an 8-bit kind
+    - *argument-index*: an 8-bit index
 
 See the JVM Spec 4.7.20.2 for the semantics of kind and argument index
 
@@ -623,7 +626,7 @@ type element-value-pairs => type-annotation \
 [Accessor] **type-annotation-element-value-pairs** type-annotation => element-value-pairs \
 [Function] **type-annotation-p** object => boolean
 
-- *target-type*: an integer - See the JVM Spec tables 4.7.20-A, B, and C
+- *target-type*: an 8-bit integer - See the JVM Spec tables 4.7.20-A, B, and C
 - *target-info*: a target info
 - *target-path*: a type path
 - *type*: a string denoting a field descriptor
@@ -632,21 +635,21 @@ type element-value-pairs => type-annotation \
 
 | target type          | target info                                     |
 |----------------------|-------------------------------------------------|
-| type parameter       | an 8 bit integer                                |
-| supertype            | a 16 bit integer                                |
-| type parameter bound | a list of two 8 bit integers                    |
+| type parameter       | an 8-bit integer                                |
+| supertype            | a 16-bit integer                                |
+| type parameter bound | a list of two 8-bit integers                    |
 | empty                | ignored                                         |
-| formal parameter     | an 8 bit integer                                |
-| throws               | a 16 bit integer                                |
+| formal parameter     | an 8-bit integer                                |
+| throws               | a 16-bit integer                                |
 | localvar             | a table - see below                             |
-| catch                | a 16 bit integer                                |
-| offset               | a 16 bit integer                                |
-| type argument        | a list of a 16 bit integer and an 8 bit integer |
+| catch                | a 16-bit integer                                |
+| offset               | a 16-bit integer                                |
+| type argument        | a list of a 16-bit integer and an 8-bit integer |
 
 - *localvar table* is a list where each element has the form `(start-pc length index)`
-    - *start-pc*: an integer offset in the bytecode array
-    - *length*: an integer length of bytecode
-    - *index*: an integer index inthe local variable array
+    - *start-pc*: a 16-bit bytecode offset
+    - *length*: a 16-bit byte length
+    - *index*: a 16-bit local variable array index
 
 See the JVM Spec 4.7.20.1 for target info semantics
 
@@ -687,8 +690,8 @@ runtime-invisible-type-annotations => type-annotations
 [Accessor] **bootstrap-methods-methods** bootstrap-methods => methods \
 [Function] **bootstrap-methods-p** object => boolean
 
-- *methods*: a list where each entry has the form `(kind reference arguments)`
-    - *kind*: an integer between 1 and 9, inclusive
+- *methods*: a list where each item has the form `(kind reference arguments)`
+    - *kind*: a 8-bit kind
     - *reference*: a loadable constant
     - *arguments*: a list of loadable constants
 
@@ -702,8 +705,8 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 [Accessor] **method-parameters-parameters** method-parameters => paramters \
 [Function] **method-parameters-p** object => boolean
 
-- *parameters*: a list where each entry has the form `(name access-flags)`
-    - *name*: a string denoting a parameter's unqualified name
+- *parameters*: a list where each item has the form `(name access-flags)`
+    - *name*: parameter's unqualified name string
     - *access-flags*: a list of keywords from the set `:final :synthetic :mandated`
 
 ### Module Attribute
@@ -721,25 +724,25 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 [Accessor] **module-provides** module => provides \
 [Function] **module-p** object => boolean
 
-- *name*: a string denoting the module name
+- *name*: a module name string
 - *flags*: a list of keywords from the set `:open :synthetic :mandated`
-- *version*: a string denoting the module version
-- *requires*: a list where each element has the form `(module flags version)`
-    - *module*: a string denoting the required module name
+- *version*: a module version string
+- *requires*: a list where each item has the form `(module flags version)`
+    - *module*: a module name string
     - *flags*: a list of keywords from the set `:transitive :static-phase :synthetic :mandated`
-    - *version*: a string denoting the required module version
-- *exports*: a list where each element has the form `(package flags exports-to)`
-    - *package*: a package name
+    - *version*: a module version string
+- *exports*: a list where each item has the form `(package flags exports-to)`
+    - *package*: a package name string
     - *flags*: a list of keywords from the set `:synthetic :mandated`
-    - *exports-to*: a list of strings denoting module names
-- *opens*:  a list where each element has the form `(package flags opens-to)`
-    - *package*: a package name
+    - *exports-to*: a list of module name strings
+- *opens*:  a list where each item has the form `(package flags opens-to)`
+    - *package*: a package name string
     - *flags*: a list of keywords from the set `:synthetic :mandated`
-    - *opens-to*: a list of strings denoting module names
-- *uses*: a list of strings denoting class names
-- *provides*: a list where each element has the form `(name provides-with)`
-    - *name*: a string denoting a class name
-    - *provides-with*: a list of strings denoting class names
+    - *opens-to*: a list of module name strings
+- *uses*: a list of class name strings
+- *provides*: a list where each item has the form `(name provides-with)`
+    - *name*: a class name string
+    - *provides-with*: a list of class name strings
 
 ### Module Packages Attribute
 
@@ -749,7 +752,7 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 [Accessor] **module-packages-packages** module-packages => packages \
 [Function] **module-packages-p** object => boolean
 
-- *packages*: a list of strings denoting package names
+- *packages*: a list of package name strings
 
 ### Module Main Class Attribute
 
@@ -759,7 +762,7 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 [Accessor] **module-main-class-main-class** module-main-class => main-class \
 [Function] **module-main-class-p** object => boolean
 
-- *main-class*: a string denoting a class name
+- *main-class*: a class name string
 
 ### Nest Host Attribute
 
@@ -769,7 +772,7 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 [Accessor] **nest-host-classes** nest-host => classes \
 [Function] **nest-host-p** object => boolean
 
-- *classes*: a list of strings denoting class names
+- *classes*: a list of class name strings
 
 ### Record Attribute
 
@@ -779,9 +782,9 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 [Accessor] **record-components** record => components \
 [Function] **record-p** object => boolean
 
-- *components*: a list where each entry has the form `(name descriptor attributes)`
-    - *name*: a string denoting the component name
-    - *descriptor*: a string denoting a field descriptor
+- *components*: a list where each item has the form `(name descriptor attributes)`
+    - *name*: a component name string
+    - *descriptor*: a field descriptor string
     - *attributes*: a list of attributes
 
 ### Permitted Subclasses Attribute
@@ -792,7 +795,7 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 [Accessor] **permitted-subclasses-classes** permitted-subclasses => classes
 [Function] **permitted-subclasses-p** object => boolean
 
-- *classes*: a list of strings denoting class names
+- *classes*: a list of class name strings
 
 ### Creating Custom Attributes
 

@@ -1,6 +1,6 @@
 # jclass: Java Class File Builder
 
-jclass builds, assembles, and disassembles  Java class files in Common Lisp,
+jclass builds, assembles, and disassembles Java class files in Common Lisp,
 making it easy to develop low level code for the JVM.
 
 ## Hello World Example
