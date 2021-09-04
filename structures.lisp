@@ -175,27 +175,34 @@
 (defparameter *attribute-parsers*
   (make-hash-table :test 'equal))
 
-(defun parse-attribute (bytes pool-array &rest arguments)
+(defun parse-attribute (bytes pool-array)
   (let* ((name-index (parse-u2 bytes))
 	 (name       (aref pool-array name-index))
 	 (length     (parse-u4 bytes))
 	 (body       (parse-bytes length bytes)))
+    ;; this is the outer struct / attribute's problem
     (assert (utf8-info-p name) (name-index)
 	    'class-format-error
 	    :message "Attribute name is not a UTF-8 constant")
-    (restart-case
-	(apply (gethash (utf8-info-text name) *attribute-parsers*
-			(lambda (bytes pool-array)
-			  (declare (ignore bytes pool-array))
-			  (error 'class-format-error
-				 :message (format nil "Unknown attribute ~A"
-						  (utf8-info-text name)))))
-	       (make-class-bytes :array body :index 0)
-	       pool-array
-	       arguments)
-      (ignore-attribute ()
-	:report "Use the raw attribute byte array"
-	(list (utf8-info-text name) body)))))
+    (let* ((error-symbol (gensym))
+	   (name-string (utf8-info-text name))
+	   (default-parser (lambda (bytes pool-array)
+			     (declare (ignore bytes pool-array))
+			     (error 'class-format-error
+				    :message (format nil "Unknown attribute ~A"
+						     (utf8-info-text name)))))
+	   (parser (gethash name-string *attribute-parsers* default-parser)))
+      (restart-case
+	  ;; return results of normal parsing or raw bytes from restart
+	  (catch error-symbol
+	    (funcall parser
+		   (make-class-bytes :array body :index 0)
+		   pool-array))
+	(skip-attribute ()
+	  :report "Use the attribute's raw byte array"
+	  ;; abandon parsing and throw raw bytes
+	  (throw error-symbol
+	    (list name-string body)))))))
 
 (defparameter *field-modifiers*
   '((:public       #x0001)
