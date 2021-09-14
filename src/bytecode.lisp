@@ -212,20 +212,18 @@
 	  (method-ref-info-name method-ref)
 	  (method-ref-info-type method-ref))))
 
-#|
-invokeinterface syntax from the JVM specification:
-
-invokeinterface
-indexbyte1
-indexbyte2
-count
-0
-
-Count is an unused byte that must not be zero.
-javac emits a 1 for count, so we do the same here.
-The 0 byte is also unused.
-When decoding, we simply ignore the two unused bytes.
-|#
+;; invokeinterface syntax from the JVM specification:
+;;
+;; invokeinterface
+;; indexbyte1
+;; indexbyte2
+;; count
+;; 0
+;;
+;; Count is an unused byte that must not be zero.
+;; javac emits a 1 for count, so we do the same here.
+;; The 0 byte is also unused.
+;; When decoding, we simply ignore the two unused bytes.
 (def-encoding :invokeinterface #xB9
   (destructuring-bind (class-name name type) operands
     (let* ((method-ref (make-interface-method-ref-info class-name name type))
@@ -238,17 +236,15 @@ When decoding, we simply ignore the two unused bytes.
 	  (interface-method-ref-info-name method-ref)
 	  (interface-method-ref-info-type method-ref))))
 
-#|
-Like invokeinterface, invokedynamic has two unused bytes:
-
-invokedynamic
-indexbyte1
-indexbyte2
-0
-0
-
-Both must be zero and are reserved for future use by the JVM.
-|#
+;; Like invokeinterface, invokedynamic has two unused bytes:
+;;
+;; invokedynamic
+;; indexbyte1
+;; indexbyte2
+;; 0
+;; 0
+;;
+;; Both must be zero and are reserved for future use by the JVM.
 (def-encoding :invokedynamic #xBA
   (destructuring-bind (index name type) operands
     (let* ((dynamic-ref (make-invoke-dynamic-info index name type))

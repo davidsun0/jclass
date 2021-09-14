@@ -175,7 +175,7 @@ pseudoinstruction.
     - [X] 4.7.28 NestHost
     - [X] 4.7.29 NestMembers
     - [X] 4.7.30 Record
-    - [X] PermittedSubclasses (Java 17 Preview Feature)
+    - [X] 4.7.31 PermittedSublcasses
 
 ### Bytecode Instructions
 
