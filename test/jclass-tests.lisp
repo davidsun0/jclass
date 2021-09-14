@@ -11,26 +11,24 @@
 (defun all-tests ()
   (fiveam:run! 'all-tests))
 
-(defun encode-char (char)
-  (jclass:encode-modified-utf8 (string char)))
-
 ;;; Modified UTF-8
 
 (fiveam:test ascii-tests
   ;; check that char-code and code-char use ASCII
   (fiveam:is (= 97 (char-code #\a)))
   (fiveam:is (char= #\a (code-char 97)))
-
   ;; sanity check
   (fiveam:is (equal '(97 98 99) (jclass:encode-modified-utf8 "abc")))
-
   ;; string concatenation with invokedynamic produces
   ;; strings with unprintable characters
   (let ((utf-str (jclass:decode-modified-utf8 #(1 58 49))))
     (fiveam:is (= 3 (length utf-str)))
     (fiveam:is (= 1 (char-code (aref utf-str 0))))))
 
-(fiveam:test unicode-tests
+(defun encode-char (char)
+  (jclass:encode-modified-utf8 (string char)))
+
+(fiveam:test unicode-encoding
   ;; check that Unicode is preserved
   (fiveam:is (= #x5496 (char-code (code-char #x5496))))
   ;; two byte UTF-8 encoding
@@ -43,6 +41,20 @@
   ;; U+10348 is broken into #xD800 and #xDF48
   (fiveam:is (equal '(#xED #xA0 #x80 #xED #xBD #x88)
 		    (encode-char (code-char #x10348)))))
+
+(defun decode-first-char (bytes)
+  (let* ((string (jclass:decode-modified-utf8 bytes)))
+    (aref string 0)))
+
+(fiveam:test unicode-decoding
+  (fiveam:is (char= #\a (decode-first-char #(97))))
+  ;; two byte char
+  (fiveam:is (= #xA2 (char-code (decode-first-char #(#xC2 #xA2)))))
+  ;; three byte char
+  (fiveam:is (= #x939 (char-code (decode-first-char #(#xE0 #xA4 #xB9)))))
+  ;; six byte char
+  (fiveam:is (= #x10348 (char-code (decode-first-char
+				    #(#xED #xA0 #x80 #xED #xBD #x88))))))
 
 ;;; Class Components
 
