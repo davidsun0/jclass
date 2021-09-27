@@ -383,7 +383,7 @@
 	for bytes = (encode-instruction instruction constant-pool offset)
 	do (incf offset (if (integerp bytes) 1 (length bytes)))
 	collect bytes into output
-	finally (return (flatten bytes))))
+	finally (return (flatten output))))
 
 (defun decode-bytecode (code-bytes constant-pool)
   (let ((bytecode-length (parse-u4 code-bytes))
