@@ -179,22 +179,18 @@
 (defgeneric constant-info-bytes (pool constant-type &rest data)
   (:documentation "Converts a constant struct to a list of bytes."))
 
-(defun pool-index (pool constant &optional (insert t))
-  "Inserts a constant into a constant pool."
+(defun pool-index (pool constant)
+  "Looks up the index of the constant in the constant pool. Inserts the constant
+first if it does not already exist in the pool."
   (let ((index (gethash constant (constant-pool-table pool))))
-    (cond
-      ;; optional constants use 0 to represent no constant
-      ((null constant) 0)
-      (index)
-      (insert
-       ;; each constant maps to its index in the pool
-       (setf (gethash constant (constant-pool-table pool))
+    (if index
+	index
+	(setf (gethash constant (constant-pool-table pool))
 	     (incf (constant-pool-size pool)
 		   ;; 8 byte constants take two slots
 		   (if (or (eq (first constant) 'long-info)
 			   (eq (first constant) 'double-info))
-		       2 1))))
-      (t (error "Constant ~A does not exist in the pool" constant)))))
+		       2 1))))))
 
 (defun constant-pool-bytes (pool)
   "Converts a constant pool to a (nested) list of bytes."
@@ -240,7 +236,7 @@
        (defmethod constant-info-bytes (,pool (,const-type (eql ',name)) &rest data)
 	 ;; locally define u2-pool-index to get the dependency index
 	 (flet ((u2-pool-index (const)
-		  (u2 (pool-index ,pool const nil))))
+		  (u2 (pool-index ,pool const))))
 	   (declare (ignorable (function u2-pool-index)))
 	   (destructuring-bind ,slots data
 	     (list ,tag ,@body)))))))

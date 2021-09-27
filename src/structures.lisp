@@ -63,7 +63,7 @@
 			       collect (expand-deserializer form stream))
 		       ,(if (symbolp fields) fields `(list ,@fields))))))))
 
-  ;; Byte manipulation
+  ;;; Byte manipulation
 
   (def-serialization u1 (value) byte-stream
     `(u1 ,(expand-serializer value))
@@ -77,14 +77,32 @@
     `(u4 ,(expand-serializer value))
     (expand-deserializer value `(parse-u4 ,byte-stream)))
 
-  ;; Constant pool references
+  ;;; Constant pool references
+
+  ;; utf8-info and class-info constants may be optional.
+  ;; When nil is supplied, use pool-index zero.
+  ;;
+  ;; As of Java 17:
+  ;;
+  ;; Places where class-info is optional:
+  ;; - super-class in java-class for java/lang/Object
+  ;; - catch-type in Code for catching all throwables
+  ;; - outer-class-index in InnerClasses for anonymous inner classes
+  ;;
+  ;; Places where utf8-info is optional:
+  ;; - inner-name-index in InnerClasses for anonymous inner classes
+  ;; - name-index in MethodParameters for anonymous parameters
+  ;; - module-version-index in Module for no version information
+  ;; - requires-version-index in Module for no version information
 
   (def-serialization utf8-info (text) utf8-index
-    `(pool-index (make-utf8-info ,text))
+    ;; optional utf8-info if text is nil
+    `(if ,text (pool-index (make-utf8-info, text)) 0)
     `(setf ,text (utf8-info-text (aref (pool-array) ,utf8-index))))
 
   (def-serialization class-info (name) class-index
-    `(pool-index (make-class-info ,name))
+    ;; optional class-info if name is nil
+    `(if ,name (pool-index (make-class-info ,name)) 0)
     `(setf ,name (class-info-name (aref (pool-array) ,class-index))))
 
   (def-serialization name-and-type-info (name type) nti-index
@@ -109,7 +127,7 @@
     `(pool-index (make-package-info ,name))
     `(setf ,name (make-package-info (aref (pool-array) ,package-index))))
   
-  ;; Special (de)serialization functions
+  ;;; Special (de)serialization functions
 
   (def-serialization access-modifiers (flags modifier-list) bytes
     `(access-modifiers ,flags ,modifier-list)
@@ -125,13 +143,13 @@
 		 (parse-bytes (- (length array) index)
 			      ,byte-list))))))
 
-  ;; Pool index with unspecified type
+  ;;; Pool index with unspecified type
 
   (def-serialization pool-index (constant) index
     `(pool-index ,constant)
     `(setf ,constant (aref (pool-array) ,index)))
 
-  ;; Structures
+  ;;; Structures
 
   (def-serialization field (field) byte-stream
     `(byte-list (constant-pool) ,field)
