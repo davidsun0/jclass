@@ -13,18 +13,17 @@ For in-depth information, see the [manual](MANUAL.md).
   (jclass:make-method-info
     '(:public :static)
     "main"
-    "([Ljava/lang/String;)V" ; void (String[])
+    "([Ljava/lang/String;)V"    ; void (String[])
     ;; attributes
     (list (jclass:make-code
-            2 ; max stack size of 2
-            1 ; max local count of 1
+            2                   ; max stack size of 2
+            1                   ; max local count of 1
             `((:getstatic "java/lang/System" "out" "Ljava/io/PrintStream;")
               (:ldc ,(make-string-info "Hello, world!"))
               (:invokevirtual "java/io/PrintStream" "println" "(Ljava/lang/String;)V")
               :return)
-            '() ; no exceptions
-            '() ; no code attributes
-    ))))
+            '()                 ; no exceptions
+            '()))))             ; no code attributes
 
 ;; generate the file
 (with-open-file (stream "./Hello.class"
@@ -33,15 +32,14 @@ For in-depth information, see the [manual](MANUAL.md).
   (write-sequence
     (jclass:java-class-bytes
       (jclass:make-java-class
-        0 55 ; v55.0 = Java 11
+        0 55                    ; v55.0 = Java 11
         '(:public)
         "Hello"	; class Hello
-        "java/lang/Object" ; extends Object
-        '() ; no implemented interfaces
-        '() ; no fields
-        (list *main*) ; one method
-        '() ; no class attributes
-        ))
+        "java/lang/Object"      ; extends Object
+        '()                     ; no implemented interfaces
+        '()                     ; no fields
+        (list *main*)           ; one method
+        '()))                   ; no class attributes
     stream))
 ```
 
