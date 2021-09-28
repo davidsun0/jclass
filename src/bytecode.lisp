@@ -220,15 +220,53 @@
 ;; count
 ;; 0
 ;;
-;; Count is an unused byte that must not be zero.
-;; javac emits a 1 for count, so we do the same here.
-;; The 0 byte is also unused.
-;; When decoding, we simply ignore the two unused bytes.
+;; Count is the number of parameter slots the method takes.
+;; Longs and doubles take two slots and other primitives and object references
+;; take one. Note that the interface object itself takes up one slot.
+;; This information is redudant and is calculated from the method type, so count
+;; is ignored when decoding.
+;; The zero byte is unused.
+
+(defun parse-field-descriptor (string index)
+  (cond
+    ((char= (char string index) #\L)
+     (loop for count from 1
+	   when (char= (char string (+ index count)) #\;)
+	     return (cons index (1+ count))))
+    ((char= (char string index) #\[)
+     (loop for count from 1
+	   when (char/= (char string (+ index count)) #\[)
+	     return (let* ((start (+ index count))
+			   (descriptor (parse-field-descriptor string start))
+			   (length (cdr descriptor)))
+		      (cons index (+ count length)))))
+    ((member (char string index)
+	     '(#\B #\C #\D #\F #\I #\J #\S #\Z)
+	     :test #'char=)
+     (cons index 1))
+    (t
+     (error 'class-format-error
+	    :message (format nil "Invalid method descriptor ~A" string)))))
+
+(defun interface-count (string)
+  (let ((descriptor '())
+	(count (lambda (descriptor)
+		 (let* ((index (car descriptor))
+			(char (char string index)))
+		   (if (member char '(#\D #\J) :test #'char=) 2 1)))))
+    (loop for index = 1 then index
+	  when (char= (char string index) #\))
+	    ;; add one for the interface object itself
+	    return (1+ (reduce #'+ (mapcar count pairs)))
+	  do (setf descriptor (parse-field-descriptor string index))
+	     (incf index (cdr descriptor))
+	  collect descriptor into pairs)))
+
 (def-encoding :invokeinterface #xB9
   (destructuring-bind (class-name name type) operands
     (let* ((method-ref (make-interface-method-ref-info class-name name type))
 	   (index (u2 (pool-index pool method-ref))))
-      (append index '(1 0))))
+      (append index (list (interface-count type) 0))))
   (let ((method-ref (aref pool (parse-u2 bytes)))
 	(_ (parse-u2 bytes))) ;; skip unused bytes
     (declare (ignore _))

@@ -64,3 +64,12 @@
     (fiveam:is (= #x0421 flags)))
   (let* ((inverse (jclass::access-flag-lookup #x0421 jclass::*class-modifiers*)))
     (fiveam:is (equal '(:public :super :abstract) inverse))))
+
+;; Used in invokeinterface encoding
+(fiveam:test interface-count
+  (fiveam:is (= 1 (jclass::interface-count "()V")))
+  (fiveam:is (= 3 (jclass::interface-count "(D)V")))
+  (fiveam:is (= 3 (jclass::interface-count "(J)V")))
+  (fiveam:is (= 2 (jclass::interface-count "(Ljava/lang/Object;)V")))
+  (fiveam:is (= 2 (jclass::interface-count "([D)V")))
+  (fiveam:is (= 2 (jclass::interface-count "([[[Ljava/lang/Object;)V"))))
