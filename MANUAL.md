@@ -11,20 +11,17 @@ covered not covered in this manual.
 
 ## Java Classes
 
-[Structure] **java-class**
+[Class] **java-class**
 
-[Function] **make-java-class** minor-version major-version flags name
-parent interfaces fields methods attributes => java-class
-
-[Accessor] **java-class-minor-version** java-class => minor-version \
-[Accessor] **java-class-major-version** java-class => major-version \
-[Accessor] **java-class-flags** java-class => flags \
-[Accessor] **java-class-name** java-class => name \
-[Accessor] **java-class-parent** java-class => parent \
-[Accessor] **java-class-interfaces** java-class => interfaces \
-[Accessor] **java-class-fields** java-class => fields \
-[Accessor] **java-class-methods** java-class => methods \
-[Accessor] **java-class-attributes** java-class => attributes
+[Accessor] **minor-version** java-class => minor-version \
+[Accessor] **major-version** java-class => major-version \
+[Accessor] **flags** java-class => flags \
+[Accessor] **name** java-class => name \
+[Accessor] **parent** java-class => parent \
+[Accessor] **interfaces** java-class => interfaces \
+[Accessor] **fields** java-class => fields \
+[Accessor] **methods** java-class => methods \
+[Accessor] **attributes** java-class => attributes
 
 - *minor-version*: a 16-bit Java Class minor version
 - *major-version*: a 16-bit Java Class major version
@@ -36,10 +33,6 @@ parent interfaces fields methods attributes => java-class
 - *fields*: a list of [field](#fields) structures
 - *methods*: a list of [method](#methods) structures
 - *attributes*: a list of [attribute](#attributes) structures
-
-[Function] **java-class-p** object => boolean
-
-Returns true if *object* is of type *java-class*; otherwise, returns false.
 
 ---
 
@@ -100,14 +93,12 @@ issues like an invalid annotation value, which prevents further parsing.
 
 ## Fields
 
-[Structure] **field-info**
+[Class] **field-info**
 
-[Function] **make-field-info** flags name descriptor attributes => field-info
-
-[Accessor] **field-info-flags** field-info => flags \
-[Accessor] **field-info-name** field-info => name \
-[Accessor] **field-info-descriptor** field-info => descriptor \
-[Accessor] **field-info-attributes** field-info => attributes
+[Accessor] **flags** field-info => flags \
+[Accessor] **name** field-info => name \
+[Accessor] **descriptor** field-info => descriptor \
+[Accessor] **attributes** field-info => attributes
 
 - *flags*: a list of keywords from this set: `:public :private :protected :static
 :final :volatile :transient :synthetic :enum`
@@ -115,30 +106,20 @@ issues like an invalid annotation value, which prevents further parsing.
 - *descriptor*: this field's type descriptor string
 - *attributes*: a list of [attribute](#Attributes) structures
 
-[Function] **field-info-p** object => boolean
-
-Returns true if *object* is of type *field-info*; otherwise, returns false.
-
 ## Methods
 
-[Structure] **method-info**
+[Class] **method-info**
 
-[Function] **make-method-info** flags name descriptor attributes => method-info
-
-[Accessor] **method-info-flags** method-info => flags \
-[Accessor] **method-info-name** method-info => name \
-[Accessor] **method-info-descriptor** method-info => descriptor \
-[Accessor] **method-info-attributes** method-info => attributes
+[Accessor] **flags** method-info => flags \
+[Accessor] **name** method-info => name \
+[Accessor] **descriptor** method-info => descriptor \
+[Accessor] **attributes** method-info => attributes
 
 - *flags*: a list of keywords from this set: `:public :private :protected :static
 :final :synchronized :bridge :varargs :native :abstract :strict :synthetic`
 - *name*: this method's name string
 - *descriptor*: this methods's type descriptor string
 - *attributes*: a list of [attribute](#Attributes) structures
-
-[Function] **method-info-p** object => boolean
-
-Returns true if *object* is of type *method-info*; otherwise, returns false.
 
 ## Constants
 
@@ -315,32 +296,30 @@ See the JVM Specification 4.3 for restrictions on descriptors.
 
 ## Attributes
 
-All accessors are `setf`-able.
+[Reader] **attribute-name** attribute => attribute-name
+
+- *attribute-name*: a string denoting the JVM specified name.
+    - For example, the boostrap-methods attribute name is "BootstrapMethods"
 
 Anonymous inner structures are represented by a list containing the values in
 order.
 
 ### Constant Value Attribute
 
-[Structure] *constant-value*
+[Class] *constant-value*
 
-[Function] **make-constant-value** value => constant-value \
-[Accessor] **constant-value-value** constant-value => value \
-[Function] **constant-value-p** object => boolean
+[Accessor] **value** constant-value => value
 
 - *value*: an integer-info, float-info, long-info, double-info, or string-info
 
 ### Code Attribute
 
-[Structure] *code*
+[Class] *code*
 
-[Function] **make-code** max-stack max-locals bytecode exceptions attributes
-=> code \
-[Accessor] **code-max-stack** code => max-stack \
-[Accessor] **code-max-locals** code => max-locals \
-[Accessor] **code-bytecode** code => bytecode \
-[Accessor] **code-exceptions** code => exceptions \
-[Function] **code-p** object => boolean
+[Accessor] **max-stack** code => max-stack \
+[Accessor] **max-locals** code => max-locals \
+[Accessor] **bytecode** code => bytecode \
+[Accessor] **exceptions** code => exceptions
 
 - *max-stack*: a 16-bit integer for the max stack size used
 - *max-locals*: a 16-bit integer for the max number of locals used
@@ -367,13 +346,11 @@ Examples of bytecode instructions:
 
 ### Stack Map Table Attribute
 
-[Structure] *stack-map-table*
+[Class] *stack-map-table*
 
-[Function] **make-stack-map-table** entries => stack-map-table \
-[Accessor] **stack-map-table-entries** stack-map-table => entries \
-[Function] **stack-map-table-p** object => boolean
+[Accessor] **table-entries** stack-map-table => entries
 
-- *entries*: a list where each element is a stack map frame
+- *entries*: a list where each item is a stack map frame
 
 #### Stack Map Frame Formats
 
@@ -408,21 +385,17 @@ Examples of bytecode instructions:
 
 ### Exceptions Attribute
 
-[Structure] *exceptions*
+[Class] *exceptions*
 
-[Function] **make-exceptions** exception-list => exceptions \
-[Accessor] **exceptions-exceptions** exceptions => exception-list \
-[Function] **exceptions-p** object => boolean
+[Accessor] **exceptions** exceptions => exception-list
 
 - *exception-list*: a list of class name strings
 
 ### Inner Classes Attribute
 
-[Structure] *inner-classes*
+[Class] *inner-classes*
 
-[Function] **make-inner-classes** classes => inner-classes \
-[Accessor] **inner-classes-classes** inner-classes => classes \
-[Function] **inner-classes-p** object => boolean
+[Accessor] **classes** inner-classes => classes
 
 - *classes*: a list where each item has the form `(inner outer name access)`
     - *inner*: a string denoting an inner class name
@@ -433,13 +406,11 @@ Examples of bytecode instructions:
 
 ### Enclosing Method Attribute
 
-[Structure] *enclosing-method*
+[Class] *enclosing-method*
 
-[Function] **make-enclosing-method** class name type => enclosing-method \
-[Accessor] **enclosing-method-class** enclosing-method => class \
-[Accessor] **enclosing-method-name** enclosing-method => name \
-[Accessor] **enclosing-method-type** enclosing-method => type \
-[Function] **enclosing-method-p** object => boolean
+[Accessor] **class** enclosing-method => class \
+[Accessor] **name** enclosing-method => name \
+[Accessor] **type** enclosing-method => type
 
 - *class*: a class name string
 - *name*: method name string
@@ -447,42 +418,34 @@ Examples of bytecode instructions:
 
 ### Synthetic Attribute
 
-[Structure] *synthetic*
-
-[Function] **make-synthetic** => synthetic-attribute \
-[Function] **synthetic-p** object => boolean
+[Class] *synthetic*
 
 The Synthetic attribute has no slots.
 
 ### Signature Attribute
 
-[Structure] *signature*
+[Class] *signature*
 
-[Function] **make-signature** signature-string => signature \
-[Accessor] **signature-signature** signature => signature-string \
-[Function] **signature-p** object => boolean
+[Accessor] **signature** signature => signature-string
 
-- *signature*: a class signature string
+- *signature-string*: a class signature string
 
-See the JVM Spec 4.7.9.1 for signature formats.
+The Signature Attribute is used for preserving type information for Java
+generics. See the JVM Spec 4.7.9.1 for signature formats.
 
 ### Source File Attribute
 
-[Structure] *source-file*
+[Class] *source-file*
 
-[Function] **make-source-file** name => source-file \
-[Accessor] **source-file-name** source-file => name \
-[Function] **source-file-p** object => boolean
+[Accessor] **name** source-file => name
 
 - *name*: a file name string
 
 ### Source Debug Extension Attribute
 
-[Structure] *source-debug-extension*
+[Class] *source-debug-extension*
 
-[Function] **make-source-debug-extension** debug => source-debug-extension \
-[Accessor] **source-debug-extension-debug** source-debug-extension => debug \
-[Function] **source-debug-extension-p** object => boolean
+[Accessor] **debug** source-debug-extension => debug
 
 - *debug*: an array of unsigned bytes
 
@@ -490,23 +453,19 @@ The binary format of *debug* is not specified by the Java Virtual Machine.
 
 ### Line Number Table Attribute
 
-[Structure] *line-number-table*
+[Class] *line-number-table*
 
-[Function] **make-line-number-table** line-numbers => line-number-table \
-[Accessor] **line-number-table-line-numbers** line-number-table => line-numbers \
-[Function] **line-number-table-p** object => boolean
+[Accessor] **line-numbers** line-number-table => line-numbers
 
-- *line-numbers*: a list where each element has the form `(start-pc line-number)`
+- *line-numbers*: a list where each item has the form `(start-pc line-number)`
     - *start-pc*: an integer denoting the bytecode index
     - *line-number*: the line number corresponding to start-pc in the source file
 
 ### Local Variable Table Attribute
 
-[Structure] *local-variable-table*
+[Class] *local-variable-table*
 
-[Function] **make-local-variable-table** local-variables => local-variable-table \
-[Accessor] **local-variable-table-local-variables** local-variable-table => local-variables \
-[Function] **local-variable-table-p** object => boolean
+[Accessor] **local-variables** local-variable-table => local-variables
 
 - *local-variables*: a list where each item has the form
 `(start-pc length name descriptor index)`
@@ -516,14 +475,11 @@ The binary format of *debug* is not specified by the Java Virtual Machine.
     - *descriptor*: the local variable's field descriptor string
     - *index*: a 16-bit local variable index
 
-## Local Variable Type Table Attribute
+### Local Variable Type Table Attribute
 
-[Structure] *local-variable-type-table*
+[Class] *local-variable-type-table*
 
-[Function] **make-local-variable-type-table** local-variables => local-variable-type-table \
-[Accessor] **local-variable-type-table-local-variables** local-variable-type-table =>
-local-variables \
-[Function] **local-variable-type-table-p** object => boolean
+[Accessor] **local-variables** local-variable-type-table => local-variables
 
 - *local-variables*: a list where each item has the form
 `(start-pc length name descriptor index)`
@@ -535,24 +491,19 @@ local-variables \
 
 ### Deprecated Attribute
 
-[Structure] *deprecated*
-
-[Function] **make-deprecated** => deprecated-attribute
-[Function] **deprecated-p** object => boolean
+[Class] *deprecated*
 
 The Deprecated attribute has no slots.
 
 ### Annotations
 
-[Structure] *annotation*
+[Class] *annotation*
 
-[Function] **make-annotation** type element-value-pairs => annotation \
-[Accessor] **annotation-type** annotation => type \
-[Accessor] **annotation-element-value-pairs** annotation => element-value-pairs \
-[Function] **annotation-p** object => boolean
+[Accessor] **type** annotation => type \
+[Accessor] **element-value-pairs** annotation => element-value-pairs
 
 - *type*: a field descriptor string
-- *element-value-pairs*: a list where each element has the form `(tag value)`
+- *element-value-pairs*: a list where each item has the form `(tag value)`
 
 #### Element Tags And Values
 
@@ -571,43 +522,25 @@ The Deprecated attribute has no slots.
 | Class  | #\\@ | an annotation                                            |
 | Array  | #\\[ | a list of element-value-pairs                            |
 
-[Structure] *runtime-visible-annotations* \
-[Structure] *runtime-invisible-annotations* \
-[Structure] *runtime-visible-parameter-annotations* \
-[Structure] *runtime-invsible-parameter-annotations*
+[Class] *runtime-visible-annotations* \
+[Class] *runtime-invisible-annotations* \
+[Class] *runtime-visible-parameter-annotations* \
+[Class] *runtime-invsible-parameter-annotations*
 
-[Function] **make-runtime-visible-annotations**
-annotations => runtime-visible-annotations \
-[Function] **make-runtime-invisible-annotations**
-annotations => runtime-visible-annotations \
-[Function] **make-runtime-visible-parameter-annotations**
-annotations => runtime-visible-parameter-annotations \
-[Function] **make-runtime-visible-parameter-annotations**
-annotations => runtime-visible-parameter-annotations
-
-[Accessor] **runtime-visible-annotations-annotations**
-runtime-visible-annotations => annotations \
-[Accessor] **runtime-invisible-annotations-annotations**
-runtime-invisible-annotations => annotations \
-[Accessor] **runtime-visible-parameter-annotations-annotations**
+[Accessor] **annotations** runtime-visible-annotations => annotations \
+[Accessor] **annotations** runtime-invisible-annotations => annotations \
+[Accessor] **annotations**
 runtime-visible-parameter-parameter-annotations => annotations \
-[Accessor] **runtime-invisible-parameter-annotations-annotations**
+[Accessor] **annotations**
 runtime-invisible-parameter-annotations => annotations
-
-[Function] **runtime-visible-annotations-p** object => boolean \
-[Function] **runtime-invisible-annotations-p** object => boolean \
-[Function] **runtime-visible-parameter-annotations-p** object => boolean \
-[Function] **runtime-invisible-parameter-annotations-p** object => boolean
 
 - *annotations*: a list of annotations
 
 ### Type Annotations
 
-[Structure] *type-path*
+[Class] *type-path*
 
-[Function] **make-type-path** paths => type-path \
-[Accessor] **type-path-paths** type-path => paths \
-[Function] **type-path-p** object => boolean
+[Accessor] **paths** type-path => paths
 
 - *paths*: a list where each item has the form `(kind argument-index)`
     - *kind*: an 8-bit kind
@@ -615,22 +548,19 @@ runtime-invisible-parameter-annotations => annotations
 
 See the JVM Spec 4.7.20.2 for the semantics of kind and argument index
 
-[Structure] *type-annotation*
+[Class] *type-annotation*
 
-[Function] **make-type-annotation** target-type target-info target-path
-type element-value-pairs => type-annotation \
-[Accessor] **type-annotation-target-type** type-annotation => target-type \
-[Accessor] **type-annotation-target-info** type-annotation => target-info \
-[Accessor] **type-annotation-target-path** type-annotation => target-path\
-[Accessor] **type-annotation-type** type-annotation => type \
-[Accessor] **type-annotation-element-value-pairs** type-annotation => element-value-pairs \
-[Function] **type-annotation-p** object => boolean
+[Accessor] **target-type** type-annotation => target-type \
+[Accessor] **target-info** type-annotation => target-info \
+[Accessor] **target-path** type-annotation => target-path\
+[Accessor] **type** type-annotation => type \
+[Accessor] **element-value-pairs** type-annotation => element-value-pairs
 
 - *target-type*: an 8-bit integer - See the JVM Spec tables 4.7.20-A, B, and C
 - *target-info*: a target info
 - *target-path*: a type path
 - *type*: a string denoting a field descriptor
-- *element-value-pairs*: a list where each element has the form `(tag value)`
+- *element-value-pairs*: a list where each item has the form `(tag value)`
     - See [Element Tags and Values](#element-tags-and-values)
 
 | target type          | target info                                     |
@@ -646,49 +576,35 @@ type element-value-pairs => type-annotation \
 | offset               | a 16-bit integer                                |
 | type argument        | a list of a 16-bit integer and an 8-bit integer |
 
-- *localvar table* is a list where each element has the form `(start-pc length index)`
+- *localvar table* is a list where each item has the form `(start-pc length index)`
     - *start-pc*: a 16-bit bytecode offset
     - *length*: a 16-bit byte length
     - *index*: a 16-bit local variable array index
 
 See the JVM Spec 4.7.20.1 for target info semantics
 
-[Structure] *runtime-visible-type-annotaitons* \
-[Structure] *runtime-invisible-type-annotations*
+[Class] *runtime-visible-type-annotaitons* \
+[Class] *runtime-invisible-type-annotations*
 
-[Function] **make-runtime-visible-type-annotations** type-annotations =>
-runtime-visible-type-annotations \
-[Function] **make-runtime-invisible-type-annotations** type-annotations =>
-runtime-invisible-type-annotations
-
-[Accessor] **runtime-visible-type-annotations-annotations**
-runtime-visible-type-annotations => type-annotations \
-[Accessor] **runtime-invisible-type-annotations-annotations**
-runtime-invisible-type-annotations => type-annotations
-
-[Function] **runtime-visible-type-annotations-p** object => boolean \
-[Function] **runtime-invisible-type-annotations-p** object => boolean
+[Accessor] **annotations** runtime-visible-type-annotations => type-annotations \
+[Accessor] **annotations** runtime-invisible-type-annotations => type-annotations
 
 - *type-annotations*: a list of type annotations
 
 ### Annotation Default Attribute
 
-[Structure] *annotation-default*
+[Class] *annotation-default*
 
-[Function] **make-annotation-default** tag value => annotation default \
-[Accessor] **annotation-default-tag** annotation-default => tag \
-[Accessor] **annotation-default-value** annotation-default => value \
-[Function] **annotation-default-p** object => boolean
+[Accessor] **tag** annotation-default => tag \
+[Accessor] **value** annotation-default => value \
 
 - *tag*, *value*: an [element tag and value](#element-tags-and-values)
 
 ### Bootstrap Methods Attribute
 
-[Structure] *bootstrap-methods*
+[Class] *bootstrap-methods*
 
-[Function] **make-bootstrap-methods** methods => bootstrap-methods \
-[Accessor] **bootstrap-methods-methods** bootstrap-methods => methods \
-[Function] **bootstrap-methods-p** object => boolean
+[Accessor] **methods** bootstrap-methods => methods
 
 - *methods*: a list where each item has the form `(kind reference arguments)`
     - *kind*: a 8-bit kind
@@ -699,11 +615,9 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 
 ### Method Parameters Attribute
 
-[Structure] *method-parameters*
+[Class] *method-parameters*
 
-[Function] **make-method-parameters** parameters => method-parameters \
-[Accessor] **method-parameters-parameters** method-parameters => paramters \
-[Function] **method-parameters-p** object => boolean
+[Accessor] **parameters** method-parameters => paramters
 
 - *parameters*: a list where each item has the form `(name access-flags)`
     - *name*: parameter's unqualified name string
@@ -711,25 +625,24 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 
 ### Module Attribute
 
-[Structure] *module*
+[Class] *module*
 
-[Function] **make-module** name flags version requires exports opens uses provides => module \
-[Accessor] **module-name** module => name \
-[Accessor] **module-flags** module => flags \
-[Accessor] **module-version** module => version \
-[Accessor] **module-requires** module => requires \
-[Accessor] **module-exports** module => exports \
-[Accessor] **module-opens** module => opens \
-[Accessor] **module-uses** module => uses \
-[Accessor] **module-provides** module => provides \
-[Function] **module-p** object => boolean
+[Accessor] **name** module => name \
+[Accessor] **flags** module => flags \
+[Accessor] **version** module => version \
+[Accessor] **requires** module => requires \
+[Accessor] **exports** module => exports \
+[Accessor] **opens** module => opens \
+[Accessor] **uses** module => uses \
+[Accessor] **provides** module => provides
 
 - *name*: a module name string
 - *flags*: a list of keywords from the set `:open :synthetic :mandated`
 - *version*: a module version string
 - *requires*: a list where each item has the form `(module flags version)`
     - *module*: a module name string
-    - *flags*: a list of keywords from the set `:transitive :static-phase :synthetic :mandated`
+    - *flags*: a list of keywords from the set `:transitive :static-phase
+:synthetic :mandated`
     - *version*: a module version string
 - *exports*: a list where each item has the form `(package flags exports-to)`
     - *package*: a package name string
@@ -746,41 +659,33 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 
 ### Module Packages Attribute
 
-[Structure] *module-pacakges*
+[Class] *module-pacakges*
 
-[Function] **make-module-packages** packages => module-packages \
-[Accessor] **module-packages-packages** module-packages => packages \
-[Function] **module-packages-p** object => boolean
+[Accessor] **packages** module-packages => packages
 
 - *packages*: a list of package name strings
 
 ### Module Main Class Attribute
 
-[Structure] *module-main-class* main-class
+[Class] *module-main-class* main-class
 
-[Function] **make-module-main-class** main-class => module-main-class \
-[Accessor] **module-main-class-main-class** module-main-class => main-class \
-[Function] **module-main-class-p** object => boolean
+[Accessor] **main-class** module-main-class => main-class
 
 - *main-class*: a class name string
 
 ### Nest Host Attribute
 
-[Structure] *nest-host*
+[Class] *nest-host*
 
-[Function] **make-nest-host** classes => nest-host \
-[Accessor] **nest-host-classes** nest-host => classes \
-[Function] **nest-host-p** object => boolean
+[Accessor] **classes** nest-host => classes
 
 - *classes*: a list of class name strings
 
 ### Record Attribute
 
-[Structure] *record*
+[Class] *record*
 
-[Function] **make-record** components => record \
-[Accessor] **record-components** record => components \
-[Function] **record-p** object => boolean
+[Accessor] **components** record => components
 
 - *components*: a list where each item has the form `(name descriptor attributes)`
     - *name*: a component name string
@@ -789,11 +694,9 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 
 ### Permitted Subclasses Attribute
 
-[Structure] *permitted-subclasses*
+[Class] *permitted-subclasses*
 
-[Function] **make-permitted-subclasses** classes => permitted-subclasses \
-[Accessor] **permitted-subclasses-classes** permitted-subclasses => classes
-[Function] **permitted-subclasses-p** object => boolean
+[Accessor] **classes** permitted-subclasses => classes
 
 - *classes*: a list of class name strings
 

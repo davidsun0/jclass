@@ -8,39 +8,43 @@ making it easy to develop low level code for the JVM.
 For in-depth information, see the [manual](MANUAL.md).
 
 ```
-;; generate the main method
+;; Build the main method
 (defparameter *main*
-  (jclass:make-method-info
-    '(:public :static)
-    "main"
-    "([Ljava/lang/String;)V"    ; void (String[])
-    ;; attributes
-    (list (jclass:make-code
-            2                   ; max stack size of 2
-            1                   ; max local count of 1
+  (make-instance 'jclass:method-info
+    :flags '(:public :static)
+    :name "main"
+    :descriptor "([Ljava/lang/String;)V" ; void (String[])
+    :attributes
+      (list
+        (make-instance 'jclass:code
+          :max-stack  2
+          :max-locals 1
+          :bytecode
             `((:getstatic "java/lang/System" "out" "Ljava/io/PrintStream;")
               (:ldc ,(make-string-info "Hello, world!"))
               (:invokevirtual "java/io/PrintStream" "println" "(Ljava/lang/String;)V")
               :return)
-            '()                 ; no exceptions
-            '()))))             ; no code attributes
+          :exceptions '()
+          :attributes '()))))
 
-;; generate the file
+;; Generate the class file
 (with-open-file (stream "./Hello.class"
                         :direction :output
                         :element-type '(unsigned-byte 8))
   (write-sequence
     (jclass:java-class-bytes
-      (jclass:make-java-class
-        0 55                    ; v55.0 = Java 11
-        '(:public)
-        "Hello"	; class Hello
-        "java/lang/Object"      ; extends Object
-        '()                     ; no implemented interfaces
-        '()                     ; no fields
-        (list *main*)           ; one method
-        '()))                   ; no class attributes
-    stream))
+      (make-instance 'jclass:java-class
+        ;; version 55.0 = Java 11
+        :major-version 55
+        :minor-version 0
+        :flags '(:public)
+        :name "Hello"
+        :parent "java/lang/Object"
+        :interfaces '()
+        :fields '()
+        :methods (list *main*)
+        :attributes '()))
+        stream))
 ```
 
 The class file executes as expected:
@@ -196,13 +200,13 @@ jclass is based off of the Java Virtual Machine Specification, and not the
 Java Programming Language. As such, it can generate code that uses the
 `invokedynamic` instruction or use special characters in names.
 
-The class file is represented as a tree of structures. Every named structure
-in the JVM Specification can be created and manipulated like any other lisp
-structure.
+The class file is represented as a tree of objects. Every named structure in
+the JVM Specification has an equivalent Lisp object.
 
-There are functions to assemble and disassemble a `java-class` structure to
+There are functions to assemble and disassemble a `java-class` object to
 and from a `.class` file. Note that fields, methods, and attributes cannot be
-serialized or deserialized outside of a class.
+serialized or deserialized outside of a class: they require a class file's
+constant pool.
 
 jclass is built up in these layers:
 
