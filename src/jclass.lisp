@@ -1,13 +1,13 @@
 (in-package #:jclass)
 
 (defun java-class-bytes (java-class &optional (pool (make-constant-pool)))
-  "Converts a java-class struct into its class file bytes."
+  "Converts a java-class object into its class file bytes."
   ;; resolve the constants first
-  (let ((bytes (byte-list pool java-class)))
+  (let ((bytes (serialize pool java-class)))
     (flatten (list*
 	      (u4 #xCAFEBABE) ; file magic number
-	      (u2 (java-class-minor-version java-class))
-	      (u2 (java-class-major-version java-class))
+	      (u2 (minor-version java-class))
+	      (u2 (major-version java-class))
 	      (constant-pool-bytes pool)
 	      bytes))))
 
@@ -23,8 +23,8 @@
 	 (pool-array    (parse-constant-pool cbytes))
 	 (jclass        (parse-java-class cbytes pool-array)))
     (declare (ignore magic))
-    (setf (java-class-minor-version jclass) minor-version)
-    (setf (java-class-major-version jclass) major-version)
+    (setf (minor-version jclass) minor-version)
+    (setf (major-version jclass) major-version)
     (values jclass pool-array)))
 
 (defun disassemble-file (path)

@@ -1,22 +1,5 @@
 (in-package #:jclass)
 
-(defmacro def-serialization (name
-			     lambda-list
-			     deserialization-input
-			     serialization-body
-			     deserialization-body)
-  (with-gensyms (argument)
-    `(progn
-       (setf (gethash ',name *serializers*)
-	     (lambda (,argument)
-	       (destructuring-bind ,lambda-list ,argument
-		 ,serialization-body)))
-       (setf (gethash ',name *deserializers*)
-	     (lambda (&rest ,argument)
-	       (destructuring-bind (,lambda-list ,deserialization-input)
-		   ,argument
-		 ,deserialization-body))))))
-
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
   (defparameter *serializers*
@@ -41,6 +24,23 @@
 	  (if deserial-fn
 	      (apply deserial-fn (cdr form) args)
 	      (error "Can't find deserializer for ~A: ~A" form args)))))
+
+  (defmacro def-serialization (name
+			       lambda-list
+			       deserialization-input
+			       serialization-body
+			       deserialization-body)
+    (with-gensyms (argument)
+      `(progn
+	 (setf (gethash ',name *serializers*)
+	       (lambda (,argument)
+		 (destructuring-bind ,lambda-list ,argument
+		   ,serialization-body)))
+	 (setf (gethash ',name *deserializers*)
+	       (lambda (&rest ,argument)
+		 (destructuring-bind (,lambda-list ,deserialization-input)
+		     ,argument
+		   ,deserialization-body))))))
 
   (def-serialization with-length (unit list fields &rest body) stream
     (with-gensyms (term)
@@ -126,7 +126,7 @@
   (def-serialization package-info (name) package-index
     `(pool-index (make-package-info ,name))
     `(setf ,name (make-package-info (aref (pool-array) ,package-index))))
-  
+
   ;;; Special (de)serialization functions
 
   (def-serialization access-modifiers (flags modifier-list) bytes
@@ -139,9 +139,9 @@
     (with-gensyms (byte-list)
       `(setf ,raw-bytes
 	     (let ((,byte-list ,byte-stream))
-	       (with-slots (array index) ,byte-list
-		 (parse-bytes (- (length array) index)
-			      ,byte-list))))))
+	       (parse-bytes (- (length (class-bytes-array ,byte-list))
+			       (class-bytes-index ,byte-list))
+			    ,byte-list)))))
 
   ;;; Pool index with unspecified type
 
@@ -152,43 +152,108 @@
   ;;; Structures
 
   (def-serialization field (field) byte-stream
-    `(byte-list (constant-pool) ,field)
+    `(serialize (constant-pool) ,field)
     `(setf ,field (parse-field-info ,byte-stream (pool-array))))
   
   (def-serialization method (method) byte-stream
-    `(byte-list (constant-pool) ,method)
+    `(serialize (constant-pool) ,method)
     `(setf ,method (parse-method-info ,byte-stream (pool-array))))
 
   (def-serialization attribute (attribute) byte-stream
-    `(byte-list (constant-pool) ,attribute)
+    `(serialize (constant-pool) ,attribute)
     `(setf ,attribute (parse-attribute ,byte-stream (pool-array))))
 
   ) ; end eval-when
 
-(defgeneric byte-list (pool struct)
-  (:documentation "Constructs the binary form of a JVM structure."))
+(defclass java-structure ()
+  ()
+  (:documentation "Data structure of a Java class file"))
 
-(defmacro def-jstruct (name slots &body body)
-  (with-gensyms (struct-obj pool byte-stream)
+(defclass attribute (java-structure)
+  ()
+  (:documentation "Java-structure attribute data"))
+
+(defgeneric serialize (pool struct)
+  (:documentation "Formats a structure into a list of bytes."))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+
+  (defun slot-definition (name)
+    `(,(symbol-concatenate name '%)
+      :initarg ,(intern (symbol-name name)
+			(find-package :keyword))
+      :accessor ,name))
+
+  (defun serializer-body (pool object slots body)
+    `(flet ((constant-pool () ,pool)
+	    (pool-index (constant)
+	      (pool-index ,pool constant)))
+       (declare (ignorable (function constant-pool)
+			   (function pool-index)))
+       (with-accessors ,(mapcar (lambda (x) (list x x)) slots)
+	   ,object
+	 (list ,@(mapcar #'expand-serializer body)))))
+
+  (defun deserializer-body (name byte-stream pool-array slots body)
+    `(flet ((pool-array () ,pool-array))
+       (declare (ignorable (function pool-array)))
+       (let ,slots
+	 ,@(mapcar
+	    (lambda (form)
+	      (expand-deserializer form byte-stream))
+	    body)
+	 (make-instance
+	  ',name
+	  ,@(loop for slot in slots
+		  collect (intern (symbol-name slot)
+				  (find-package :keyword))
+		  collect slot)))))
+
+  ) ; end eval-when
+
+(defmacro def-jstruct (name slots &body structure)
+  (with-gensyms (pool byte-stream struct-obj)
     `(progn
-       (defstruct (,name (:constructor ,(symbol-concatenate 'make- name) ,slots))
-	 ,@slots)
+       (defclass ,name (java-structure)
+	 ,(mapcar #'slot-definition slots))
 
-       (defmethod byte-list (,pool (,struct-obj ,name))
-	 (flet ((constant-pool () ,pool)
-		(pool-index (constant) (pool-index ,pool constant)))
-	   (declare (ignorable (function constant-pool)
-			       (function pool-index)))
-	   (with-slots ,slots ,struct-obj
-	     (list ,@(mapcar #'expand-serializer body)))))
+       (defmethod serialize (,pool (,struct-obj ,name))
+	 ,(serializer-body pool struct-obj slots structure))
 
        (defun ,(symbol-concatenate 'parse- name) (,byte-stream ,pool)
-	 (flet ((pool-array () ,pool))
-	   (declare (ignorable (function pool-array)))
-	   (let ,slots
-	     ,@(loop for form in body
-		     collect (expand-deserializer form byte-stream))
-	     (,(symbol-concatenate 'make- name) ,@slots)))))))
+	 ,(deserializer-body name byte-stream pool slots structure)))))
+
+(defgeneric attribute-name (attribute)
+  (:documentation "Reads the attribute's name.")
+  (:method (object)
+    (error "Object ~A does not have an attribute name." object)))
+
+(defmethod serialize :around (pool (attribute attribute))
+  ;; Common header for all attributes
+  (let ((body (flatten (call-next-method))))
+    (list
+     ;; Every attribute has a header containing the name and length in bytes.
+     (u2 (pool-index pool (make-utf8-info (attribute-name attribute))))
+     (u4 (length body))
+     body)))
+
+(defmacro def-attribute (name name-string slots &body structure)
+  (with-gensyms (pool byte-stream struct-obj)
+    `(progn
+       (defclass ,name (attribute)
+	 ((attribute-name%
+	   :initform ,name-string
+	   :reader attribute-name
+	   :allocation :class)
+	  ,@(mapcar #'slot-definition slots)))
+
+       (defmethod serialize (,pool (,struct-obj ,name))
+	 ,(serializer-body pool struct-obj slots structure))
+
+       (setf (gethash ,name-string *attribute-parsers*)
+	     (lambda (,byte-stream ,pool)
+	       (declare (ignorable ,byte-stream))
+	       ,(deserializer-body name byte-stream pool slots structure))))))
 
 (defparameter *attribute-parsers*
   (make-hash-table :test 'equal))
@@ -214,8 +279,8 @@
 	  ;; return results of normal parsing or raw bytes from restart
 	  (catch error-symbol
 	    (funcall parser
-		   (make-class-bytes :array body :index 0)
-		   pool-array))
+		     (make-class-bytes :array body :index 0)
+		     pool-array))
 	(skip-attribute ()
 	  :report "Use the attribute's raw byte array"
 	  ;; abandon parsing and throw raw bytes
@@ -287,37 +352,7 @@
   (with-length u2 attributes attribute
     (attribute attribute)))
 
-;;; Attributes
-
-(defmacro def-attribute (name name-string slots &body body)
-  (with-gensyms (struct-obj pool byte-stream)
-    `(progn
-       (defstruct (,name (:constructor ,(symbol-concatenate 'make- name) ,slots))
-	 ,@slots)
-
-       (defmethod byte-list (,pool (,struct-obj ,name))
-	 (flet ((constant-pool () ,pool)
-		(pool-index (constant) (pool-index ,pool constant)))
-	   (declare (ignorable (function constant-pool)
-			       (function pool-index)))
-	   (flet ((serialize-body ()
-		    (with-slots ,slots ,struct-obj
-		      (list ,@(mapcar #'expand-serializer body)))))
-	     (let ((body (flatten (serialize-body))))
-	       (list
-		(u2 (pool-index (make-utf8-info ,name-string)))
-		(u4 (length body))
-		body)))))
-
-       (setf (gethash ,name-string *attribute-parsers*)
-	     (lambda (,byte-stream ,pool)
-	       (declare (ignorable ,byte-stream))
-	       (flet ((pool-array () ,pool))
-		 (declare (ignorable (function pool-array)))
-		 (let ,slots
-		   ,@(loop for form in body
-			   collect (expand-deserializer form byte-stream))
-		   (,(symbol-concatenate 'make- name) ,@slots))))))))
+;;; Attributes by JVM Specification order
 
 (def-attribute constant-value "ConstantValue" (value)
   (u2 (pool-index value)))
@@ -493,6 +528,7 @@
   (u2 (utf8-info name)))
 
 (def-attribute source-debug-extension "SourceDebugExtension" (debug)
+  ;; FIXME: the debug bytes are to be interpreted as a modified UTF-8 string
   (raw-bytes debug))
 
 (def-attribute line-number-table "LineNumberTable" (line-numbers)
@@ -535,7 +571,7 @@
 	    (list
 	     (u2 (pool-index pool (make-utf8-info type)))
 	     (u2 (pool-index pool (make-utf8-info const))))))
-     (#\@ (byte-list value pool))
+     (#\@ (serialize value pool))
      (#\[ (let ((values value))
 	    (list
 	     (u2 (length values))
@@ -580,7 +616,7 @@
       (element-value tag value)))
 
   (def-serialization annotation (annotation) byte-stream
-    `(byte-list ,annotation (constant-pool))
+    `(serialize ,annotation (constant-pool))
     `(setf ,annotation (parse-annotation ,byte-stream (pool-array)))))
 
 (def-attribute runtime-visible-annotations
@@ -694,7 +730,7 @@
       (u1 argument-index)))
 
   (def-serialization type-path (type-path) byte-stream
-    `(byte-list ,type-path (constant-pool))
+    `(serialize ,type-path (constant-pool))
     `(setf ,type-path (parse-type-path ,byte-stream (pool-array))))
 
   (def-jstruct type-annotation
@@ -707,7 +743,7 @@
       (element-value tag value)))
 
   (def-serialization type-annotation (annotation) byte-stream
-    `(byte-list ,annotation (constant-pool))
+    `(serialize ,annotation (constant-pool))
     `(setf ,annotation (parse-type-annotation ,byte-stream (pool-array)))))
 
 (def-attribute runtime-visible-type-annotations
