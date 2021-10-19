@@ -133,18 +133,17 @@
     `(access-modifiers ,flags ,modifier-list)
     `(setf ,flags (access-flag-lookup ,bytes ,modifier-list)))
 
-  (def-serialization raw-bytes (raw-bytes) byte-stream
-    `(coerce 'list ,raw-bytes)
-    ;; byte-stream is a class-bytes struct
+  (def-serialization modified-utf8 (string) byte-stream
+    `(encode-modified-utf8 ,string)
     (with-gensyms (byte-list)
-      `(setf ,raw-bytes
-	     (let ((,byte-list ,byte-stream))
-	       (parse-bytes (- (length (class-bytes-array ,byte-list))
-			       (class-bytes-index ,byte-list))
-			    ,byte-list)))))
+      `(setf ,string
+	     (let ((,byte-list ,byte-stream)) ; prevent double evaluation
+	       (decode-modified-utf8
+		(parse-bytes (- (length (class-bytes-array ,byte-list))
+				(class-bytes-index ,byte-list))
+			     ,byte-list))))))
 
   ;;; Pool index with unspecified type
-
   (def-serialization pool-index (constant) index
     `(pool-index ,constant)
     `(setf ,constant (aref (pool-array) ,index)))
@@ -224,7 +223,7 @@
 	 ,(deserializer-body name byte-stream pool slots structure)))))
 
 (defgeneric attribute-name (attribute)
-  (:documentation "Reads the attribute's name.")
+  (:documentation "Reader for the JVM specified attribute name string.")
   (:method (object)
     (error "Object ~A does not have an attribute name." object)))
 
@@ -528,8 +527,7 @@
   (u2 (utf8-info name)))
 
 (def-attribute source-debug-extension "SourceDebugExtension" (debug)
-  ;; FIXME: the debug bytes are to be interpreted as a modified UTF-8 string
-  (raw-bytes debug))
+  (modified-utf8 debug))
 
 (def-attribute line-number-table "LineNumberTable" (line-numbers)
   (with-length u2 line-numbers (start-pc line-number)
