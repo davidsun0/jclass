@@ -22,7 +22,7 @@
 
 	   #:float-info
 	   #:make-float-info
-	   #:float-info-ieee-bits
+	   #:float-info-value
 	   #:float-info-p
 
 	   #:long-info
@@ -32,7 +32,7 @@
 
 	   #:double-info
 	   #:make-double-info
-	   #:double-info-ieee-bits
+	   #:double-info-value
 	   #:double-info-p
 
 	   #:class-info
@@ -108,6 +108,7 @@
 	   #:package-info-p
 
 	   ;; structures
+	   #:java-structure
 	   #:java-class
 	   #:field-info
 	   #:method-info

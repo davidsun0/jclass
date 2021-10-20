@@ -155,17 +155,6 @@
 	 output))
       (coerce (nreverse output) 'string))))
 
-;; See *class-modifiers*, *method-modifiers*, *field-modifiers*, etc.
-(defun access-modifiers (modifiers table)
-  (let ((flags (mapcar (lambda (x) (second (assoc x table)))
-		       modifiers)))
-    (reduce #'logior flags)))
-
-(defun access-flag-lookup (flags table)
-  (loop for modifier in table
-	when (not (zerop (logand (second modifier) flags)))
-	  collect (first modifier)))
-
 ;;; Constant Pool
 
 (defstruct constant-pool
@@ -249,8 +238,8 @@ first if it does not already exist in the pool."
 (def-jconstant integer-info 3 (value)
   (u4 value))
 
-(def-jconstant float-info 4 (ieee-bits)
-  (u4 ieee-bits))
+(def-jconstant float-info 4 (value)
+  (u4 (float-features:single-float-bits value)))
 
 ;; pool-index and parse-constant-pool implement the fact that
 ;; long-info and double-info take two pool slots
@@ -258,9 +247,10 @@ first if it does not already exist in the pool."
   (u4 (ash value -32))
   (u4 value))
 
-(def-jconstant double-info 6 (ieee-bits)
-  (u4 (ash ieee-bits -32))
-  (u4 ieee-bits))
+(def-jconstant double-info 6 (value)
+  (let ((ieee-bits (float-features:double-float-bits value)))
+    (u4 (ash ieee-bits -32))
+    (u4 ieee-bits)))
 
 (def-jconstant class-info 7 (name)
   (u2-pool-index (make-utf8-info name)))
@@ -313,20 +303,20 @@ first if it does not already exist in the pool."
     (cons
      tag
      (case tag
-       ((1)
+       ((1) ; UTF8
 	(let ((length (parse-u2 bytes)))
 	  (list (parse-bytes length bytes))))
-       ((3 4)
+       ((3 4) ; integer, float
 	(list (parse-u4 bytes)))
-       ((5 6)
+       ((5 6) ; long, double
 	(list (logior (ash (parse-u4 bytes) 32)
 		      (parse-u4 bytes))))
-       ((7 8 16 19 20)
+       ((7 8 16 19 20) ; info types with one reference
 	(list (parse-u2 bytes)))
-       ((9 10 11 12 17 18)
+       ((9 10 11 12 17 18) ; info types with two references
 	(list (parse-u2 bytes)
 	      (parse-u2 bytes)))
-       ((15)
+       ((15) ; method handle
 	(list (parse-u1 bytes)
 	      (parse-u2 bytes)))
        (t (error 'class-format-error
@@ -343,9 +333,11 @@ first if it does not already exist in the pool."
 	 (case tag
 	   ((1) (make-utf8-info    (decode-modified-utf8 (second constant))))
 	   ((3) (make-integer-info (second constant)))
-	   ((4) (make-float-info   (second constant)))
+	   ((4) (make-float-info
+		 (float-features:bits-single-float (second constant))))
 	   ((5) (make-long-info    (second constant)))
-	   ((6) (make-double-info  (second constant)))
+	   ((6) (make-double-info
+		 (float-features:bits-double-float (second constant))))
 	   ((7 8 16 19 20)
 	    (let* ((utf8-index (second constant))
 		   (utf8-constant (build-constant pool utf8-index))

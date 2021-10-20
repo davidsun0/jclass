@@ -5,6 +5,7 @@
   :author "David Sun"
   :license "MIT"
   :description "Java class file manipulation"
+  :depends-on ("float-features")
   :components
   ((:module "src"
     :components

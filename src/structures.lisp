@@ -23,6 +23,36 @@
        body))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  ;; Java Structure Domain Specific Language
+  ;;
+  ;; This DSL automates the definition of more than 30 attributes and structures
+  ;; described by the Java Virtual Machine.
+  ;;
+  ;; With the def-structure and def-attribute macros, attributes can be
+  ;; described with little more than the format given in the JVM Specification,
+  ;; including automatic creation of both serialization and deserialization
+  ;; routines.
+  ;;
+  ;; Java specification:
+  ;; field_info {
+  ;;     u2             access_flags;
+  ;;     u2             name_index;
+  ;;     u2             descriptor_index;
+  ;;     u2             attributes_count;
+  ;;     attribute_info attributes[attributes_count];
+  ;; }
+  ;;
+  ;; jclass implementation:
+  ;; (def-jstruct field-info (flags name descriptor attributes)
+  ;;   (u2 (access-modifiers flags *field-modifiers*))
+  ;;   (u2 (utf8-info name))
+  ;;   (u2 (utf8-info descriptor))
+  ;;   (with-length u2 attributes attribute
+  ;;     (attribute attribute)))
+  ;;
+  ;; Additionally, this DSL handles constant pool lookup so structures contain
+  ;; constant values, not references. This makes structures independent from
+  ;; constant pools, simplifying structure manipulation.
 
   (defparameter *serializers*
     (make-hash-table :test 'eq))
@@ -137,7 +167,7 @@
 
   (defun access-flag-lookup (flags table)
     (loop for modifier in table
-	  when (not (zerop (logand (second modifier) flags)))
+	  unless (zerop (logand (second modifier) flags))
 	    collect (first modifier)))
 
   (def-serialization access-modifiers (flags modifier-list) bytes
@@ -599,26 +629,28 @@
 
 (defun parse-element-value (byte-stream pool-array)
   (let ((tag (code-char (parse-u1 byte-stream)))
+	;; Can't premptively lookup the value because array values have different
+	;; parsing semantics.
 	(value))
     (flet ((pool-lookup ()
 	     (aref pool-array (parse-u2 byte-stream))))
-      (setf value
-	    (ccase tag
-	      ((#\B #\I #\S #\Z)
-	       (integer-info-value (pool-lookup)))
-	      (#\C (code-char (integer-info-value (pool-lookup))))
-	      (#\D (double-info-ieee-bits (pool-lookup)))
-	      (#\F (float-info-ieee-bits (pool-lookup)))
-	      (#\J (long-info-value (pool-lookup)))
-	      (#\s (string-info-text (pool-lookup)))
-	      (#\e (list
-		    (utf8-info-text (pool-lookup))
-		    (utf8-info-text (pool-lookup))))
-	      (#\@ (parse-annotation byte-stream pool-array))
-	      (#\[ (let ((count (parse-u2 byte-stream)))
-		     (loop repeat count
-			   collect (parse-element-value byte-stream pool-array))))))
-      (list tag value))))
+      (list
+       tag
+       (ccase tag
+	 ((#\B #\I #\S #\Z)
+	  (integer-info-value    (pool-lookup)))
+	 (#\C (code-char (integer-info-value (pool-lookup))))
+	 (#\D (double-info-value (pool-lookup)))
+	 (#\F (float-info-value  (pool-lookup)))
+	 (#\J (long-info-value   (pool-lookup)))
+	 (#\s (string-info-text  (pool-lookup)))
+	 (#\e (list
+	       (utf8-info-text (pool-lookup))
+	       (utf8-info-text (pool-lookup))))
+	 (#\@ (parse-annotation byte-stream pool-array))
+	 (#\[ (let ((count (parse-u2 byte-stream)))
+		(loop repeat count
+		      collect (parse-element-value byte-stream pool-array)))))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (def-serialization element-value (tag value) byte-stream
