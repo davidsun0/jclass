@@ -98,7 +98,7 @@
     (def-encoding instruction code
       (u1 (first operands))
       (list (parse-u1 bytes)))))
-    
+
 (dolist (u2-instruction
 	 '((#x11 :sipush)
 	   (#x99 :ifeq) (#x9A :ifne)
@@ -283,6 +283,7 @@
 ;; 0
 ;;
 ;; Both must be zero and are reserved for future use by the JVM.
+
 (def-encoding :invokedynamic #xBA
   (destructuring-bind (index name type) operands
     (let* ((dynamic-ref (make-invoke-dynamic-info index name type))
@@ -437,23 +438,3 @@
 		      (t (error 'class-format-error
 				:message (format nil "Unknown instruction ~A" opcode))))))))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (def-serialization bytecode (instructions) byte-stream
-    `(let ((bytes (if (arrayp ,instructions)
-		      (coerce ,instructions 'list)
-		      (encode-bytecode ,instructions (constant-pool)))))
-       (list (u4 (length bytes)) bytes))
-    `(setf ,instructions (decode-bytecode ,byte-stream (pool-array)))))
-
-(def-attribute code "Code" (max-stack max-locals bytecode exceptions attributes)
-  (u2 max-stack)
-  (u2 max-locals)
-  ;; u4 length is calculated in encode / decode functions
-  (bytecode bytecode)
-  (with-length u2 exceptions (start-pc end-pc handler-pc catch-type)
-    (u2 start-pc)
-    (u2 end-pc)
-    (u2 handler-pc)
-    (u2 (class-info catch-type)))
-  (with-length u2 attributes attribute
-    (attribute attribute)))

@@ -1,5 +1,27 @@
 (in-package #:jclass)
 
+(defclass java-structure ()
+  ()
+  (:documentation "Data structure of a Java class file"))
+
+(defclass attribute (java-structure)
+  ()
+  (:documentation "Java-structure attribute data"))
+
+(defgeneric attribute-name (attribute)
+  (:documentation "Reader for the JVM specified attribute name string."))
+
+(defgeneric serialize (pool struct)
+  (:documentation "Formats a structure into a list of bytes.")
+  (:method :around (pool (attribute attribute))
+    (let ((body (flatten (call-next-method))))
+      ;; All attributes share a six byte header containing the attribute name and
+      ;; length in bytes.
+      (list
+       (u2 (pool-index pool (make-utf8-info (attribute-name attribute))))
+       (u4 (length body))
+       body))))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
   (defparameter *serializers*
@@ -7,23 +29,6 @@
 
   (defparameter *deserializers*
     (make-hash-table :test 'eq))
-
-  (defun expand-serializer (form)
-    (if (symbolp form)
-	form
-	(let ((serial-fn (gethash (car form) *serializers*)))
-	  (if serial-fn
-	      (funcall serial-fn (cdr form))
-	      (error "Can't find serializer for ~A" form)))))
-
-  (defun expand-deserializer (form &rest args)
-    (if (symbolp form)
-	(destructuring-bind (value) args
-	  `(setf ,form ,value))
-	(let ((deserial-fn (gethash (car form) *deserializers*)))
-	  (if deserial-fn
-	      (apply deserial-fn (cdr form) args)
-	      (error "Can't find deserializer for ~A: ~A" form args)))))
 
   (defmacro def-serialization (name
 			       lambda-list
@@ -42,8 +47,40 @@
 		     ,argument
 		   ,deserialization-body))))))
 
+  (defun expand-serializer (form)
+    (if (symbolp form)
+	form
+	(let ((serial-fn (gethash (car form) *serializers*)))
+	  (if serial-fn
+	      (funcall serial-fn (cdr form))
+	      (error "Can't find serializer for ~A" form)))))
+
+  (defun expand-deserializer (form value)
+    (if (symbolp form)
+	`(setf ,form ,value)
+	(let ((deserial-fn (gethash (car form) *deserializers*)))
+	  (if deserial-fn
+	      (funcall deserial-fn (cdr form) value)
+	      (error "Can't find deserializer for ~A: ~A" form value)))))
+
+  ;;; Byte manipulation
+
+  (def-serialization u1 (value) byte-stream
+    `(u1 ,(expand-serializer value))
+    (expand-deserializer value `(parse-u1 ,byte-stream)))
+
+  (def-serialization u2 (value) byte-stream
+    `(u2 ,(expand-serializer value))
+    (expand-deserializer value `(parse-u2 ,byte-stream)))
+
+  (def-serialization u4 (value) byte-stream
+    `(u4 ,(expand-serializer value))
+    (expand-deserializer value `(parse-u4 ,byte-stream)))
+
   (def-serialization with-length (unit list fields &rest body) stream
     (with-gensyms (term)
+      (assert (member unit '(u1 u2 u4) :test 'eq) (unit)
+	      "Length unit ~S is must be u1, u2, or u4." unit)
       `(list
 	(,unit (length ,list))
 	(mapcar (lambda (&rest ,term)
@@ -57,25 +94,12 @@
 				   (u4 'parse-u4))
 				 stream)))
 	 (setf ,list
-	       (loop repeat ,item-count collect
-		     (let ,(if (symbolp fields) `(,fields) fields)
+	       (loop repeat ,item-count
+		     collect
+		     (let ,(if (symbolp fields) (list fields) fields)
 		       ,@(loop for form in body
 			       collect (expand-deserializer form stream))
 		       ,(if (symbolp fields) fields `(list ,@fields))))))))
-
-  ;;; Byte manipulation
-
-  (def-serialization u1 (value) byte-stream
-    `(u1 ,(expand-serializer value))
-    (expand-deserializer value `(parse-u1 ,byte-stream)))
-  
-  (def-serialization u2 (value) byte-stream
-    `(u2 ,(expand-serializer value))
-    (expand-deserializer value `(parse-u2 ,byte-stream)))
-
-  (def-serialization u4 (value) byte-stream
-    `(u4 ,(expand-serializer value))
-    (expand-deserializer value `(parse-u4 ,byte-stream)))
 
   ;;; Constant pool references
 
@@ -105,75 +129,31 @@
     `(if ,name (pool-index (make-class-info ,name)) 0)
     `(setf ,name (class-info-name (aref (pool-array) ,class-index))))
 
-  (def-serialization name-and-type-info (name type) nti-index
-    `(pool-index (make-name-and-type-info ,name ,type))
-    (with-gensyms (info-ref)
-      `(let ((,info-ref (aref (pool-array) ,nti-index)))
-	 (setf ,name (name-and-type-info-name ,info-ref))
-	 (setf ,type (name-and-type-info-type ,info-ref)))))
+  ;; See *class-modifiers*, *method-modifiers*, *field-modifiers*, etc.
+  (defun access-modifiers (modifiers table)
+    (let ((flags (mapcar (lambda (x) (second (assoc x table)))
+			 modifiers)))
+      (reduce #'logior flags)))
 
-  (def-serialization method-handle-info (kind reference) mhi-index
-    `(pool-index (make-method-handle-info ,kind ,reference))
-    (with-gensyms (handle-ref)
-      `(let ((,handle-ref (aref (pool-array) ,mhi-index)))
-	 (setf ,kind      (method-handle-info-kind      ,handle-ref))
-	 (setf ,reference (method-handle-info-reference ,handle-ref)))))
-
-  (def-serialization module-info (name) module-index
-    `(pool-index (make-module-info ,name))
-    `(setf ,name (make-module-info (aref (pool-array) ,module-index))))
-
-  (def-serialization package-info (name) package-index
-    `(pool-index (make-package-info ,name))
-    `(setf ,name (make-package-info (aref (pool-array) ,package-index))))
-
-  ;;; Special (de)serialization functions
+  (defun access-flag-lookup (flags table)
+    (loop for modifier in table
+	  when (not (zerop (logand (second modifier) flags)))
+	    collect (first modifier)))
 
   (def-serialization access-modifiers (flags modifier-list) bytes
     `(access-modifiers ,flags ,modifier-list)
     `(setf ,flags (access-flag-lookup ,bytes ,modifier-list)))
 
-  (def-serialization modified-utf8 (string) byte-stream
-    `(encode-modified-utf8 ,string)
-    (with-gensyms (byte-list)
-      `(setf ,string
-	     (let ((,byte-list ,byte-stream)) ; prevent double evaluation
-	       (decode-modified-utf8
-		(parse-bytes (- (length (class-bytes-array ,byte-list))
-				(class-bytes-index ,byte-list))
-			     ,byte-list))))))
-
-  ;;; Pool index with unspecified type
+  ;; Pool index with unspecified type
   (def-serialization pool-index (constant) index
     `(pool-index ,constant)
     `(setf ,constant (aref (pool-array) ,index)))
-
-  ;;; Structures
-
-  (def-serialization field (field) byte-stream
-    `(serialize (constant-pool) ,field)
-    `(setf ,field (parse-field-info ,byte-stream (pool-array))))
-  
-  (def-serialization method (method) byte-stream
-    `(serialize (constant-pool) ,method)
-    `(setf ,method (parse-method-info ,byte-stream (pool-array))))
 
   (def-serialization attribute (attribute) byte-stream
     `(serialize (constant-pool) ,attribute)
     `(setf ,attribute (parse-attribute ,byte-stream (pool-array))))
 
   ) ; end eval-when
-
-(defclass java-structure ()
-  ()
-  (:documentation "Data structure of a Java class file"))
-
-(defclass attribute (java-structure)
-  ()
-  (:documentation "Java-structure attribute data"))
-
-(defgeneric serialize (pool struct)
-  (:documentation "Formats a structure into a list of bytes."))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 
@@ -221,20 +201,6 @@
 
        (defun ,(symbol-concatenate 'parse- name) (,byte-stream ,pool)
 	 ,(deserializer-body name byte-stream pool slots structure)))))
-
-(defgeneric attribute-name (attribute)
-  (:documentation "Reader for the JVM specified attribute name string.")
-  (:method (object)
-    (error "Object ~A does not have an attribute name." object)))
-
-(defmethod serialize :around (pool (attribute attribute))
-  ;; Common header for all attributes
-  (let ((body (flatten (call-next-method))))
-    (list
-     ;; Every attribute has a header containing the name and length in bytes.
-     (u2 (pool-index pool (make-utf8-info (attribute-name attribute))))
-     (u4 (length body))
-     body)))
 
 (defmacro def-attribute (name name-string slots &body structure)
   (with-gensyms (pool byte-stream struct-obj)
@@ -286,6 +252,8 @@
 	  (throw error-symbol
 	    (list name-string body)))))))
 
+;;; Field Info
+
 (defparameter *field-modifiers*
   '((:public       #x0001)
     (:private      #x0002)
@@ -303,6 +271,8 @@
   (u2 (utf8-info descriptor))
   (with-length u2 attributes attribute
     (attribute attribute)))
+
+;;; Method Info
 
 (defparameter *method-modifiers*
   '((:public       #x0001)
@@ -336,6 +306,17 @@
     (:enum         #x4000)
     (:module       #x8000)))
 
+;;; Java Class File
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (def-serialization field (field) byte-stream
+    `(serialize (constant-pool) ,field)
+    `(setf ,field (parse-field-info ,byte-stream (pool-array))))
+
+  (def-serialization method (method) byte-stream
+    `(serialize (constant-pool) ,method)
+    `(setf ,method (parse-method-info ,byte-stream (pool-array)))))
+
 (def-jstruct java-class
     (minor-version major-version flags name parent interfaces fields methods attributes)
   ;; handle version number independently for easy constant pool manipulation
@@ -355,6 +336,27 @@
 
 (def-attribute constant-value "ConstantValue" (value)
   (u2 (pool-index value)))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (def-serialization bytecode (instructions) byte-stream
+    `(let ((bytes (if (arrayp ,instructions)
+		      (coerce ,instructions 'list)
+		      (encode-bytecode ,instructions (constant-pool)))))
+       (list (u4 (length bytes)) bytes))
+    `(setf ,instructions (decode-bytecode ,byte-stream (pool-array)))))
+
+(def-attribute code "Code" (max-stack max-locals bytecode exceptions attributes)
+  (u2 max-stack)
+  (u2 max-locals)
+  ;; u4 length is calculated in encode / decode functions
+  (bytecode bytecode)
+  (with-length u2 exceptions (start-pc end-pc handler-pc catch-type)
+    (u2 start-pc)
+    (u2 end-pc)
+    (u2 handler-pc)
+    (u2 (class-info catch-type)))
+  (with-length u2 attributes attribute
+    (attribute attribute)))
 
 ;; StackMapTable serialization
 
@@ -514,6 +516,14 @@
     (u2 (utf8-info name))
     (u2 (access-modifiers *inner-class-modifiers* access))))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (def-serialization name-and-type-info (name type) nti-index
+    `(pool-index (make-name-and-type-info ,name ,type))
+    (with-gensyms (info-ref)
+      `(let ((,info-ref (aref (pool-array) ,nti-index)))
+	 (setf ,name (name-and-type-info-name ,info-ref))
+	 (setf ,type (name-and-type-info-type ,info-ref))))))
+
 (def-attribute enclosing-method "EnclosingMethod" (class name type)
   (u2 (class-info class))
   (u2 (name-and-type-info name type)))
@@ -525,6 +535,17 @@
 
 (def-attribute source-file "SourceFile" (name)
   (u2 (utf8-info name)))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (def-serialization modified-utf8 (string) byte-stream
+    `(encode-modified-utf8 ,string)
+    (with-gensyms (byte-list)
+      `(setf ,string
+	     (let ((,byte-list ,byte-stream)) ; prevent double evaluation
+	       (decode-modified-utf8
+		(parse-bytes (- (length (class-bytes-array ,byte-list))
+				(class-bytes-index ,byte-list))
+			     ,byte-list)))))))
 
 (def-attribute source-debug-extension "SourceDebugExtension" (debug)
   (modified-utf8 debug))
@@ -759,6 +780,14 @@
 (def-attribute annotation-default "AnnotationDefault" (tag value)
   (element-value tag value))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (def-serialization method-handle-info (kind reference) mhi-index
+    `(pool-index (make-method-handle-info ,kind ,reference))
+    (with-gensyms (handle-ref)
+      `(let ((,handle-ref (aref (pool-array) ,mhi-index)))
+	 (setf ,kind      (method-handle-info-kind      ,handle-ref))
+	 (setf ,reference (method-handle-info-reference ,handle-ref))))))
+
 (def-attribute bootstrap-methods "BootstrapMethods" (methods)
   (with-length u2 methods (kind reference arguments)
     (u2 (method-handle-info kind reference))
@@ -793,6 +822,15 @@
 (defparameter *opens-modifiers*
   '((:synthetic    #x1000)
     (:mandated     #x8000)))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (def-serialization module-info (name) module-index
+    `(pool-index (make-module-info ,name))
+    `(setf ,name (make-module-info (aref (pool-array) ,module-index))))
+
+  (def-serialization package-info (name) package-index
+    `(pool-index (make-package-info ,name))
+    `(setf ,name (make-package-info (aref (pool-array) ,package-index)))))
 
 (def-attribute module "Module" (name flags version requires exports opens uses provides)
   (u2 (utf8-info name))
