@@ -7,13 +7,19 @@
   :description "Java class file manipulation"
   :depends-on ("float-features")
   :components
-  ((:module "src"
-    :components
-    ((:file "package")
-     (:file "constant-pool" :depends-on ("package"))
-     (:file "bytecode"      :depends-on ("package"))
-     (:file "structures"    :depends-on ("constant-pool" "bytecode"))
-     (:file "jclass"        :depends-on ("structures")))))
+  ((:file "package")
+   (:module "bytecode"
+	    :depends-on ("package")
+	    :serial t
+	    :components
+	    ((:file "encoding")))
+   (:module "class"
+	    :depends-on ("package" "bytecode")
+	    :serial t
+	    :components
+	    ((:file "constant-pool")
+	     (:file "structures")
+	     (:file "jclass"))))
   :in-order-to ((test-op (test-op "jclass/tests"))))
 
 (defsystem "jclass/tests"

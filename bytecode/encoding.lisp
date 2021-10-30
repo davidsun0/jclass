@@ -267,9 +267,8 @@
     (let* ((method-ref (make-interface-method-ref-info class-name name type))
 	   (index (u2 (pool-index pool method-ref))))
       (append index (list (interface-count type) 0))))
-  (let ((method-ref (aref pool (parse-u2 bytes)))
-	(_ (parse-u2 bytes))) ;; skip unused bytes
-    (declare (ignore _))
+  (let ((method-ref (aref pool (parse-u2 bytes))))
+    (parse-u2 bytes) ; skip unused bytes
     (list (interface-method-ref-info-class-name method-ref)
 	  (interface-method-ref-info-name method-ref)
 	  (interface-method-ref-info-type method-ref))))
@@ -289,9 +288,8 @@
     (let* ((dynamic-ref (make-invoke-dynamic-info index name type))
 	   (index (u2 (pool-index pool dynamic-ref))))
       (append index '(0 0))))
-  (let ((dynamic-ref (aref pool (parse-u2 bytes)))
-	(_ (parse-u2 bytes))) ;; ignore unused bytes
-    (declare (ignore _))
+  (let ((dynamic-ref (aref pool (parse-u2 bytes))))
+    (parse-u2 bytes) ; ignore unused bytes
     (list (invoke-dynamic-info-bootstrap-index dynamic-ref)
 	  (invoke-dynamic-info-name dynamic-ref)
 	  (invoke-dynamic-info-type dynamic-ref))))
@@ -378,9 +376,11 @@
 		    :if_icmpgt :if_icmple
 		    :if_acmpeq :if_acmpne
 		    :goto :jsr
-		    :ifnull :ifnonnull))
+		    :ifnull :ifnonnull)
+	       :test 'eq)
        3) ; 2 byte offset + 1 byte opcode
-      ((member op '(:goto_w :jsr_w))
+      ((member op '(:goto_w :jsr_w)
+	       :test 'eq)
        5) ; 4 byte offset + 1 byte opcode
       ((eq op :tableswitch)
        (destructuring-bind (default low high &rest offsets) (rest instruction)
