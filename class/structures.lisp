@@ -544,7 +544,7 @@
     (u2 (class-info inner))
     (u2 (class-info outer))
     (u2 (utf8-info name))
-    (u2 (access-modifiers *inner-class-modifiers* access))))
+    (u2 (access-modifiers access *inner-class-modifiers*))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (def-serialization name-and-type-info (name type) nti-index
