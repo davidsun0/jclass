@@ -173,11 +173,11 @@ Unicode characters may be used if each element of *string* represents a code poi
 
 - *integer*: an 32-bit signed integer
 
-[Function] **make-float-info** ieee-bits => float-info \
-[Accessor] **float-info-ieee-bits** float-info => ieee-bits \
+[Function] **make-float-info** value => float-info \
+[Accessor] **float-info-value** float-info => value \
 [Function] **float-info-p** object => boolean
 
-- *ieee-bits*: a 32-bit signed integer whose two's compliment bits represent a 32-bit IEEE float
+- *value*: a `single-float` (32-bit IEEE single precision float)
 
 [Function] **make-long-info** integer => long-info \
 [Accessor] **long-info-value** long-info => integer \
@@ -185,11 +185,11 @@ Unicode characters may be used if each element of *string* represents a code poi
 
 - *integer*: a 64-bit signed integer
 
-[Function] **make-double-info** ieee-bits => double-info \
-[Accessor] **double-info-ieee-bits** double-info ieee-bits \
+[Function] **make-double-info** value => double-info \
+[Accessor] **double-info-value** double-info value \
 [Function] **double-info-p** object => boolean
 
-- *ieee-bits*: a 64-bit signed integer whose two's compliment bits represent a 64-bit IEEE float
+- *value*: a `double-float` (64-bit IEEE double precision float)
 
 [Function] **make-class-info** name => class-info \
 [Accessor] **class-info-name** class-info => name \
@@ -327,7 +327,7 @@ order.
 - *exceptions*: a list of exception table entries
     - each entry is a list with the form `(start-pc end-pc handler-pc catch-type)`
     - `start-pc`, `end-pc`, `handler-pc` are 16-bit bytecode offsets
-    - `catch-type` is a class name string or `nil` to catch all exceptions
+    - `catch-type` is a class name string or `nil` to catch all throwables
 - *attributes*: a list of attributes
 
 Examples of bytecode instructions:
@@ -507,20 +507,20 @@ The Deprecated attribute has no slots.
 
 #### Element Tags And Values
 
-| type   | tag  | value                                                    |
-|--------|------|----------------------------------------------------------|
-| byte   | #\\B | an 8-bit integer                                         |
-| char   | #\\C | a character with a code point of U+FFFF or below         |
-| double | #\\D | a 64-bit integer representing the bits of a 64-bit float |
-| float  | #\\F | a 32-bit integer representing the bits of a 32-bit float |
-| int    | #\\I | a 32-bit integer                                         |
-| long   | #\\J | a 64-bit integer                                         |
-| short  | #\\S | a 16-bit integer                                         |
-| boolean| #\\Z | 0 or 1                                                   |
-| String | #\\s | a string                                                 |
-| Enum   | #\\e | a list of an enum type and value                         |
-| Class  | #\\@ | an annotation                                            |
-| Array  | #\\[ | a list of element-value-pairs                            |
+| type   | tag    | value                                            |
+|--------|--------|--------------------------------------------------|
+| byte   | `#\\B` | an 8-bit integer                                 |
+| char   | `#\\C` | a character with a code point of U+FFFF or below |
+| double | `#\\D` | a `double-float` (IEEE 754 64-bit float)         |
+| float  | `#\\F` | a `single-float` (IEEE 754 32-bit float)         |
+| int    | `#\\I` | a 32-bit integer                                 |
+| long   | `#\\J` | a 64-bit integer                                 |
+| short  | `#\\S` | a 16-bit integer                                 |
+| boolean| `#\\Z` | 0 or 1                                           |
+| String | `#\\s` | a string                                         |
+| Enum   | `#\\e` | a list of an enum type and value                 |
+| Class  | `#\\@` | an annotation                                    |
+| Array  | `#\\[` | a list of element-value-pairs                    |
 
 [Class] *runtime-visible-annotations* \
 [Class] *runtime-invisible-annotations* \
