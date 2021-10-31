@@ -172,14 +172,15 @@
   "Looks up the index of the constant in the constant pool. Inserts the constant
 first if it does not already exist in the pool."
   (let ((index (gethash constant (constant-pool-table pool))))
-    (if index
-	index
-	(setf (gethash constant (constant-pool-table pool))
-	     (incf (constant-pool-size pool)
-		   ;; 8 byte constants take two slots
-		   (if (or (eq (first constant) 'long-info)
-			   (eq (first constant) 'double-info))
-		       2 1))))))
+    (cond
+      (index)
+      (t
+       (setf (gethash constant (constant-pool-table pool))
+	     (incf (constant-pool-size pool)))
+       ;; The slot following an 8 byte constant is empty.
+       (when (or (eq (first constant) 'long-info)
+		 (eq (first constant) 'double-info))
+	 (incf (constant-pool-size pool)))))))
 
 (defun constant-pool-bytes (pool)
   "Converts a constant pool to a (nested) list of bytes."
@@ -244,13 +245,15 @@ first if it does not already exist in the pool."
 ;; pool-index and parse-constant-pool implement the fact that
 ;; long-info and double-info take two pool slots
 (def-jconstant long-info 5 (value)
-  (u4 (ash value -32))
-  (u4 value))
+  (list
+   (u4 (ash value -32))
+   (u4 value)))
 
 (def-jconstant double-info 6 (value)
   (let ((ieee-bits (float-features:double-float-bits value)))
-    (u4 (ash ieee-bits -32))
-    (u4 ieee-bits)))
+    (list
+     (u4 (ash ieee-bits -32))
+     (u4 ieee-bits))))
 
 (def-jconstant class-info 7 (name)
   (u2-pool-index (make-utf8-info name)))
