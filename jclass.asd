@@ -27,6 +27,8 @@
   :components
   ((:module "test"
     :serial t
-    :components ((:file "jclass-tests"))))
+    :components ((:file "package")
+		 (:file "modified-utf8")
+		 (:file "serialization"))))
   :perform (test-op (op c)
 	     (symbol-call :fiveam '#:run! (find-symbol* '#:all-tests '#:jclass/tests))))
