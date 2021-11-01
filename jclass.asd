@@ -1,7 +1,7 @@
 ;;;; -*- Mode: Lisp; Syntax: ANSI-Common-Lisp; Base: 10 -*-
 
 (defsystem "jclass"
-  :version "0.1.1"
+  :version "0.2.0"
   :author "David Sun"
   :license "MIT"
   :description "Java class file manipulation"
