@@ -628,10 +628,7 @@
 		   collect (write-element-value tag value pool))))))))
 
 (defun parse-element-value (byte-stream pool-array)
-  (let ((tag (code-char (parse-u1 byte-stream)))
-	;; Can't premptively lookup the value because array values have different
-	;; parsing semantics.
-	(value))
+  (let ((tag (code-char (parse-u1 byte-stream))))
     (flet ((pool-lookup ()
 	     (aref pool-array (parse-u2 byte-stream))))
       (list

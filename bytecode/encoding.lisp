@@ -52,7 +52,6 @@
 	   (#x7E :iand) (#x7F :land)
 	   (#x80 :ior) (#x81 :lor)
 	   (#x82 :ixor) (#x83 :lxor)
-	   (#x84 :iinc)
 	   ;; conversion
 	   (#x85 :i2l) (#x86 :i2f) (#x87 :i2d)
 	   (#x88 :l2i) (#x89 :l2f) (#x8A :l2d)
@@ -89,9 +88,14 @@
 	     ;; unhygenic: exposes bytes, pool, offset
 	     (cons ,instruction ,decoder)))))
 
+;; The bipush operand is signed, unlike that of the other u1-instructions.
+(def-encoding :bipush #x10
+  ;; The function u1 automatically handles signed encoding.
+  (u1 (first operands))
+  (list (signed-8 (parse-u1 bytes))))
+
 (dolist (u1-instruction
-	 '((#x10 :bipush)
-	   (#x15 :iload)  (#x16 :lload)  (#x17 :fload)  (#x18 :dload)  (#x19 :aload)
+	 '((#x15 :iload)  (#x16 :lload)  (#x17 :fload)  (#x18 :dload)  (#x19 :aload)
 	   (#x36 :istore) (#x37 :lstore) (#x38 :fstore) (#x39 :dstore) (#x3A :astore)
 	   (#xA9 :ret) (#xBC :newarray)))
   (destructuring-bind (code instruction) u1-instruction
@@ -99,9 +103,12 @@
       (u1 (first operands))
       (list (parse-u1 bytes)))))
 
-(dolist (u2-instruction
-	 '((#x11 :sipush)
-	   (#x99 :ifeq) (#x9A :ifne)
+(def-encoding :sipush #x11
+  (u2 (first operands))
+  (list (signed-16 (parse-u2 bytes))))
+
+(dolist (branch-instruction
+	 '((#x99 :ifeq) (#x9A :ifne)
 	   (#x9B :iflt) (#x9C :ifge) (#x9D :ifgt) (#x9E :ifle)
 	   (#x9F :if_icmpeq) (#xA0 :if_icmpne)
 	   (#xA1 :if_icmplt) (#xA2 :if_icmpge)
@@ -112,8 +119,9 @@
 	   (#xC6 :ifnull) (#xC7 :ifnonnull)))
   (destructuring-bind (code instruction) u2-instruction
     (def-encoding instruction code
-      (u2 (first operands))
-      (list (parse-u2 bytes)))))
+      (u2 (- offset (first operands)))
+      (list (+ (signed-16 (parse-u2 bytes))
+	       offset)))))
 
 (def-encoding :ldc #x12
   ;; check for pool index < 256 ?
@@ -129,6 +137,12 @@
   (u2 (pool-index pool (first operands)))
   (list (aref pool (parse-u2 bytes))))
 
+(def-encoding :iinc #x84
+  (append (u1 (first operands))
+	  (u1 (second operands)))
+  (list (parse-u1 bytes)
+	(signed-8 (parse-u1 bytes))))
+
 (def-encoding :tableswitch #xAA
   (destructuring-bind (default low high &rest offsets) operands
     (flatten
@@ -142,9 +156,9 @@
       (mapcar #'u4 offsets))))
   (let* ((padding (loop repeat (- 3 (mod offset 4))
 			do (parse-u1 bytes)))
-	 (default (parse-u4 bytes))
-	 (low     (parse-u4 bytes))
-	 (high    (parse-u4 bytes)))
+	 (default (signed-32 (parse-u4 bytes)))
+	 (low     (signed-32 (parse-u4 bytes)))
+	 (high    (signed-32 (parse-u4 bytes))))
     (declare (ignore padding))
     (list* default
 	   low
@@ -166,13 +180,15 @@
 	    collect (u4 offset)))))
   (let ((padding (loop repeat (- 3 (mod offset 4))
 		       do (parse-u1 bytes)))
-	(default (parse-u4 bytes))
-	(length  (parse-u4 bytes)))
+	(default (signed-32 (parse-u4 bytes)))
+	(length  (signed-32 (parse-u4 bytes))))
     (declare (ignore padding))
+    (assert (>= length 0) (length) 'class-format-error
+	    :message "Lookupswitch length must be zero or greater.")
     (cons default
 	  (loop repeat length
-		collect (list (parse-u4 bytes)
-			      (parse-u4 bytes))))))
+		collect (list (signed-32 (parse-u4 bytes))
+			      (signed-32 (parse-u4 bytes)))))))
 
 (dolist (field-instruction
 	 '((#xB2 :getstatic)
@@ -330,7 +346,7 @@
       ((eq instruction :iinc)
        (list instruction
 	     (parse-u2 bytes)
-	     (parse-u2 bytes)))
+	     (signed-16 (parse-u2 bytes))))
       (instruction
        (list instruction (parse-u2 bytes)))
       (t (error 'class-format-error
@@ -346,11 +362,11 @@
 
 (def-encoding :goto_w #xC8
   (u4 (first operands))
-  (list (parse-u4 bytes)))
+  (list (signed-32 (parse-u4 bytes))))
 
 (def-encoding :jsr_w #xC9
   (u4 (first operands))
-  (list (parse-u4 bytes)))
+  (list (signed-32 (parse-u4 bytes))))
 
 (defun encode-instruction (instruction constant-pool offset)
   "Encodes a single bytecode instruction."

@@ -64,6 +64,8 @@
 		      :fill-pointer count)
 	  (incf index count)))))
 
+(declaim (inline parse-u1 parse-u2 parse-u4))
+
 (defun parse-u1 (bytes)
   (aref (parse-bytes 1 bytes) 0))
 
@@ -78,6 +80,26 @@
 	    (ash (aref u4-bytes 1) 16)
 	    (ash (aref u4-bytes 2) 8)
 	    (aref u4-bytes 3))))
+
+(declaim (inline signed-8 signed-16 signed-32))
+
+(defun signed-8 (byte)
+  "Converts an (unsigned-byte 8) to a (signed-byte 8) with the same bitstring."
+  (if (> byte #.(1- (expt 2 7)))
+      (- byte #.(expt 2 8))
+      byte))
+
+(defun signed-16 (short)
+  "Converts an (unsigned-byte 16) to a (signed-byte 16) with the same bitstring."
+  (if (> short #.(1- (expt 2 15)))
+      (- short #.(expt 2 16))
+      short))
+
+(defun signed-32 (int)
+  "Converts an (unsigned-byte 32) to a (signed-byte 32) with the same bitstring."
+  (if (> int #.(1- (expt 2 31)))
+      (- int #.(expt 2 32))
+      int))
 
 (defun encode-modified-utf8 (string)
   "Encodes a string as a list of modified UTF-8 bytes."
