@@ -507,20 +507,20 @@ The Deprecated attribute has no slots.
 
 #### Element Tags And Values
 
-| type   | tag    | value                                            |
-|--------|--------|--------------------------------------------------|
-| byte   | `#\\B` | an 8-bit integer                                 |
-| char   | `#\\C` | a character with a code point of U+FFFF or below |
-| double | `#\\D` | a `double-float` (IEEE 754 64-bit float)         |
-| float  | `#\\F` | a `single-float` (IEEE 754 32-bit float)         |
-| int    | `#\\I` | a 32-bit integer                                 |
-| long   | `#\\J` | a 64-bit integer                                 |
-| short  | `#\\S` | a 16-bit integer                                 |
-| boolean| `#\\Z` | 0 or 1                                           |
-| String | `#\\s` | a string                                         |
-| Enum   | `#\\e` | a list of an enum type and value                 |
-| Class  | `#\\@` | an annotation                                    |
-| Array  | `#\\[` | a list of element-value-pairs                    |
+| type   | tag   | value                                            |
+|--------|-------|--------------------------------------------------|
+| byte   | `#\B` | an 8-bit integer                                 |
+| char   | `#\C` | a character with a code point of U+FFFF or below |
+| double | `#\D` | a `double-float` (IEEE 754 64-bit float)         |
+| float  | `#\F` | a `single-float` (IEEE 754 32-bit float)         |
+| int    | `#\I` | a 32-bit integer                                 |
+| long   | `#\J` | a 64-bit integer                                 |
+| short  | `#\S` | a 16-bit integer                                 |
+| boolean| `#\Z` | 0 or 1                                           |
+| String | `#\s` | a string                                         |
+| Enum   | `#\e` | a list of an enum type and value                 |
+| Class  | `#\@` | an annotation                                    |
+| Array  | `#\[` | a list of element-value-pairs                    |
 
 [Class] *runtime-visible-annotations* \
 [Class] *runtime-invisible-annotations* \
