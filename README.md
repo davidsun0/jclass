@@ -21,7 +21,7 @@ For in-depth information, see the [manual](MANUAL.md).
           :max-locals 1
           :bytecode
             `((:getstatic "java/lang/System" "out" "Ljava/io/PrintStream;")
-              (:ldc ,(make-string-info "Hello, world!"))
+              (:ldc ,(jclass:make-string-info "Hello, world!"))
               (:invokevirtual "java/io/PrintStream" "println" "(Ljava/lang/String;)V")
               :return)
           :exceptions '()
