@@ -52,7 +52,7 @@
   ;;
   ;; Additionally, this DSL handles constant pool lookup so structures contain
   ;; constant values, not references. This makes structures independent from
-  ;; constant pools, simplifying structure manipulation.
+  ;; constant pools, simplifying manipulation.
 
   (defparameter *serializers*
     (make-hash-table :test 'eq))
@@ -182,10 +182,6 @@
   (def-serialization attribute (attribute) byte-stream
     `(serialize (constant-pool) ,attribute)
     `(setf ,attribute (parse-attribute ,byte-stream (pool-array))))
-
-  ) ; end eval-when
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
 
   (defun slot-definition (name)
     `(,(symbol-concatenate name '%)
@@ -605,7 +601,7 @@
 
 ;; Annotation serialization
 
-(defun write-element-value (tag value pool)
+(defun element-value-bytes (tag value pool)
   (list
    (u1 (char-code tag))
    (ccase tag
@@ -651,7 +647,7 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (def-serialization element-value (tag value) byte-stream
-    `(write-element-value ,tag ,value (constant-pool))
+    `(element-value-bytes ,tag ,value (constant-pool))
     `(destructuring-bind (tag% value%)
 	 (parse-element-value ,byte-stream (pool-array))
        (setf ,tag tag%

@@ -29,6 +29,8 @@
   (:report (lambda (condition stream)
 	     (format stream "~A" (message condition)))))
 
+;; Buffer that represents the elements of array starting at index and ending
+;; at array's fill pointer.
 (defstruct class-bytes
   array
   index)
@@ -119,13 +121,15 @@
 		  (push (logior #b10000000 (logand #x3F code)) output))
 		 ((< code #x110000)
 		  (let* ((code (- code #x10000))
-			 ;; decompose into UTF-16 surrogate pairs
+			 ;; Decompose into UTF-16 surrogate pairs
 			 (upper (ash code -10))
 			 (lower (logand code #x3FF)))
 		    (encode-code-point (+ #xD800 upper))
 		    (encode-code-point (+ #xDC00 lower))))
+		 ;; Implementations that can infer this is unreachable code
+		 #-(or sbcl)
 		 (t (error "Invalid Unicode code point: ~A" code)))))
-      (loop for code in (coerce string 'list)
+      (loop for code across string
 	    do (encode-code-point (char-code code)))
       (nreverse output))))
 

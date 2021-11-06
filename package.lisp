@@ -151,6 +151,7 @@
 	   ;; accessors
 	   #:annotations
 	   #:attributes
+	   #:bytecode
 	   #:classes
 	   #:components
 	   #:debug
@@ -166,6 +167,8 @@
 	   #:local-variables
 	   #:main-class
 	   #:major-version
+	   #:max-stack
+	   #:max-locals
 	   #:methods
 	   #:minor-version
 	   #:name
