@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 0.2.1 (2021-11-13)
+
+### Bug Fixes
+
+- Fix example in README
+- Fix formatting in MANUAL
+
+- Fix exported symbols for the Code attribute
+- Fix bytecode encoding
+    - Fix conversion of signed operands
+    - Fix calculation of bytecode offsets
+    - Fix operand encoding for `iinc`
+
 ## 0.2.0 (2021-11-01)
 
 ### Breaking Changes
