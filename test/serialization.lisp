@@ -69,10 +69,12 @@
 
 (fiveam:test serialization
   (fiveam:is (test-class-file "Hello")
-	     "Re-encoding produced different binary files.")
-  (fiveam:is (test-class-file "Math")
-	     "Re-encoding produced different binary files.")
-  (fiveam:is (test-class-file "Switch")
-	     "Re-encoding produced different binary files.")
+	     "Re-encoding Hello.class produced different binary files.")
   (fiveam:is (test-class-file "Unicode")
-	     "Re-encoding produced different binary files."))
+	     "Re-encoding Unicode.class produced different binary files.")
+  (fiveam:is (test-class-file "Math")
+	     "Re-encoding Math.class produced different binary files.")
+  (fiveam:is (test-class-file "Switch")
+	     "Re-encoding Switch.class produced different binary files.")
+  (fiveam:is (test-class-file "Fibonacci")
+	     "Re-encoding Fibonacci.class produced different binary files."))

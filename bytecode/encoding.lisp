@@ -117,9 +117,9 @@
 	   (#xA7 :goto)
 	   (#xA8 :jsr)
 	   (#xC6 :ifnull) (#xC7 :ifnonnull)))
-  (destructuring-bind (code instruction) u2-instruction
+  (destructuring-bind (code instruction) branch-instruction
     (def-encoding instruction code
-      (u2 (- offset (first operands)))
+      (u2 (- (first operands) offset))
       (list (+ (signed-16 (parse-u2 bytes))
 	       offset)))))
 
