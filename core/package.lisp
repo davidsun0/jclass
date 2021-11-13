@@ -1,5 +1,3 @@
-(in-package :cl-user)
-
 (defpackage #:jclass
   (:use :cl)
   (:shadow #:class
@@ -190,6 +188,6 @@
 	   #:version
 
 	   ;; top level
-	   #:java-class-bytes
+	   #:assemble-jclass
 	   #:disassemble-jclass
 	   #:disassemble-file))

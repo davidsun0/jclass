@@ -365,9 +365,7 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (def-serialization bytecode (instructions) byte-stream
-    `(let ((bytes (if (arrayp ,instructions)
-		      (coerce ,instructions 'list)
-		      (encode-bytecode ,instructions (constant-pool)))))
+    `(let ((bytes (encode-bytecode ,instructions (constant-pool))))
        (list (u4 (length bytes)) bytes))
     `(setf ,instructions (decode-bytecode ,byte-stream (pool-array)))))
 
@@ -621,7 +619,7 @@
 	    (list
 	     (u2 (length values))
 	     (loop for (tag value) in values
-		   collect (write-element-value tag value pool))))))))
+		   collect (element-value-bytes tag value pool))))))))
 
 (defun parse-element-value (byte-stream pool-array)
   (let ((tag (code-char (parse-u1 byte-stream))))

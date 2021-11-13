@@ -37,10 +37,10 @@
 (defun re-encode-class (bytes)
   (multiple-value-bind (jclass pool-array)
       (jclass:disassemble-jclass bytes)
-    (jclass:java-class-bytes jclass (recreate-pool pool-array))))
+    (jclass:assemble-jclass jclass (recreate-pool pool-array))))
 
 (defun test-file-path (name)
-  (let ((local-path (format nil "test/data/~A.class" name)))
+  (let ((local-path (format nil "core.test/data/~A.class" name)))
     (asdf:system-relative-pathname "jclass" local-path)))
 
 (defun test-class-file (filename)

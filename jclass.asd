@@ -7,25 +7,20 @@
   :description "Java class file manipulation"
   :depends-on ("float-features")
   :components
-  ((:file "package")
-   (:module "bytecode"
-	    :depends-on ("package")
-	    :serial t
+  ((:module "core"
 	    :components
-	    ((:file "encoding")))
-   (:module "class"
-	    :depends-on ("package" "bytecode")
-	    :serial t
-	    :components
-	    ((:file "constant-pool")
-	     (:file "structures")
-	     (:file "jclass"))))
+	    ((:file "package")
+	     (:file "utility" :depends-on ("package"))
+	     (:file "constant-pool" :depends-on ("utility"))
+	     (:file "bytecode" :depends-on ("constant-pool"))
+	     (:file "structures" :depends-on ("bytecode" "constant-pool"))
+	     (:file "jclass" :depends-on ("structures")))))
   :in-order-to ((test-op (test-op "jclass/tests"))))
 
 (defsystem "jclass/tests"
   :depends-on ("jclass" "fiveam")
   :components
-  ((:module "test"
+  ((:module "core.test"
     :serial t
     :components ((:file "package")
 		 (:file "modified-utf8")

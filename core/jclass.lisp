@@ -1,13 +1,13 @@
 (in-package #:jclass)
 
-(defun java-class-bytes (java-class &optional (pool (make-constant-pool)))
+(defun assemble-jclass (jclass &optional (pool (make-constant-pool)))
   "Converts a java-class object into its class file bytes."
   ;; resolve the constants first
-  (let ((bytes (serialize pool java-class)))
+  (let ((bytes (serialize pool jclass)))
     (flatten (list*
 	      (u4 #xCAFEBABE) ; file magic number
-	      (u2 (minor-version java-class))
-	      (u2 (major-version java-class))
+	      (u2 (minor-version jclass))
+	      (u2 (major-version jclass))
 	      (constant-pool-bytes pool)
 	      bytes))))
 

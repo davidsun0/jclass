@@ -1,5 +1,7 @@
 (in-package #:jclass)
 
+;;; Bytecode instruction encoding
+
 (defparameter *bytecode-encoders*
   ;; 205 instructions used / 256 = 0.8008
   (make-hash-table :size 256 :rehash-threshold 0.85))
@@ -431,14 +433,17 @@
 	    do (incf offset (instruction-length instruction pool offset)))
     label-table))
 
-(defun encode-bytecode (instructions constant-pool)
-  "Encodes a list of bytecode instructions to a list of bytes."
-  (loop for instruction in instructions
-	for offset = 0 then offset
-	for bytes = (encode-instruction instruction constant-pool offset)
-	do (incf offset (if (integerp bytes) 1 (length bytes)))
-	collect bytes into output
-	finally (return (flatten output))))
+(defgeneric encode-bytecode (instructions constant-pool)
+  (:documentation "Encodes bytecode instructions to a list of bytes.")
+  (:method ((instructions array) constant-pool)
+    (coerce instructions 'list))
+  (:method ((instructions list) constant-pool)
+    (loop for instruction in instructions
+	  for offset = 0 then offset
+	  for bytes = (encode-instruction instruction constant-pool offset)
+	  do (incf offset (if (integerp bytes) 1 (length bytes)))
+	  collect bytes into output
+	  finally (return (flatten output)))))
 
 (defun decode-bytecode (code-bytes constant-pool)
   (let ((bytecode-length (parse-u4 code-bytes))
