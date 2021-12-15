@@ -113,6 +113,7 @@
 
 	   ;; attributes
 	   #:attribute
+	   #:code
 	   #:constant-value
 	   #:stack-map-table
 	   #:exceptions
