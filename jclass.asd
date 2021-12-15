@@ -14,6 +14,7 @@
 	     (:file "constant-pool" :depends-on ("utility"))
 	     (:file "bytecode" :depends-on ("constant-pool"))
 	     (:file "structures" :depends-on ("bytecode" "constant-pool"))
+	     (:file "print-object" :depends-on ("structures"))
 	     (:file "jclass" :depends-on ("structures")))))
   :in-order-to ((test-op (test-op "jclass/tests"))))
 
