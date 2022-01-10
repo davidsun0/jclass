@@ -8,6 +8,8 @@
 	   #:class-format-error
 
 	   ;; constant pool
+	   #:make-constant-pool
+
 	   #:utf8-info
 	   #:make-utf8-info
 	   #:utf8-info-text
@@ -187,6 +189,9 @@
 	   #:uses
 	   #:value
 	   #:version
+
+	   ;; bytecode
+	   #:instruction-length
 
 	   ;; top level
 	   #:assemble-jclass
