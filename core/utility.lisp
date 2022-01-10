@@ -4,6 +4,20 @@
   `(let ,(loop for s in symbols collect `(,s (gensym)))
      ,@body))
 
+(defmacro do-unroll (var values &body body)
+  "Like `dolist`, but loop unrolled at compile time."
+  `(progn
+     ,@(loop for v in values
+	     collect `(symbol-macrolet ((,var ,v))
+			,@body))))
+
+(defmacro fresh-dolist ((var list-form) &body body)
+  "A simple version of dolist that also guarantees a fresh binding of `var`."
+  (with-gensyms (fresh)
+  `(loop for ,fresh in ,list-form do
+    (let ((,var ,fresh))
+      ,@body))))
+
 (defun flatten (tree)
   "Flattens a tree into a list of leaves. Treats nil as an empty list, not an atom."
   (let ((output '()))

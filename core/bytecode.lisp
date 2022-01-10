@@ -10,7 +10,7 @@
   ;; default value should be lambda that errors
   (make-array 256 :initial-element nil))
 
-(dolist (simple-instruction
+(fresh-dolist (simple-instruction
 	 '((#x00 :nop)
 	   ;; constants
 	   (#x01 :aconst-null)
@@ -96,7 +96,7 @@
   (u1 (first operands))
   (list (signed-8 (parse-u1 bytes))))
 
-(dolist (u1-instruction
+(fresh-dolist (u1-instruction
 	 '((#x15 :iload)  (#x16 :lload)  (#x17 :fload)  (#x18 :dload)  (#x19 :aload)
 	   (#x36 :istore) (#x37 :lstore) (#x38 :fstore) (#x39 :dstore) (#x3A :astore)
 	   (#xA9 :ret) (#xBC :newarray)))
@@ -109,7 +109,7 @@
   (u2 (first operands))
   (list (signed-16 (parse-u2 bytes))))
 
-(dolist (branch-instruction
+(fresh-dolist (branch-instruction
 	 '((#x99 :ifeq) (#x9A :ifne)
 	   (#x9B :iflt) (#x9C :ifge) (#x9D :ifgt) (#x9E :ifle)
 	   (#x9F :if-icmpeq) (#xA0 :if-icmpne)
@@ -192,7 +192,7 @@
 		collect (list (signed-32 (parse-u4 bytes))
 			      (signed-32 (parse-u4 bytes)))))))
 
-(dolist (field-instruction
+(fresh-dolist (field-instruction
 	 '((#xB2 :getstatic)
 	   (#xB3 :putstatic)
 	   (#xB4 :getfield)
@@ -312,7 +312,7 @@
 	  (invoke-dynamic-info-name dynamic-ref)
 	  (invoke-dynamic-info-type dynamic-ref))))
 
-(dolist (class-instruction
+(fresh-dolist (class-instruction
 	 '((#xBB :new)
 	   (#xBD :anewarray)
 	   (#xC0 :checkcast)

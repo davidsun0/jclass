@@ -115,6 +115,7 @@
 
 	   ;; attributes
 	   #:attribute
+	   #:attribute-name
 	   #:code
 	   #:constant-value
 	   #:stack-map-table
