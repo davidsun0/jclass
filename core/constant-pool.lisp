@@ -2,7 +2,7 @@
 
 (defstruct constant-pool
   (size 0)
-  ;; mapping from constants to pool index
+  ;; Mapping from constants to pool index
   (table (make-hash-table :test 'equal)))
 
 (defgeneric resolve-constant (pool constant-type &rest data)
@@ -11,54 +11,21 @@
 (defgeneric constant-info-bytes (pool constant-type &rest data)
   (:documentation "Converts a constant struct to a list of bytes."))
 
-(defun pool-index (pool constant)
-  "Looks up the index of the constant in the constant pool. Inserts the constant
-first if it does not already exist in the pool."
-  (let ((index (gethash constant (constant-pool-table pool))))
-    (cond
-      (index)
-      (t
-       (setf (gethash constant (constant-pool-table pool))
-	     (incf (constant-pool-size pool)))
-       ;; The slot following an 8 byte constant is empty.
-       (when (or (eq (first constant) 'long-info)
-		 (eq (first constant) 'double-info))
-	 (incf (constant-pool-size pool)))))))
-
-(defun constant-pool-bytes (pool)
-  "Converts a constant pool to a (nested) list of bytes."
-  ;; resolve all constants
-  (let ((pool-table (constant-pool-table pool)))
-    ;; don't modify the hash table while iterating over it
-    (loop for key in (loop for k being the hash-keys of pool-table
-			   collect k)
-	  do (apply #'resolve-constant pool key))
-    ;; sort constants by index
-    (let* ((index-constants (loop for k being the hash-keys of pool-table
-				    using (hash-value v)
-				  collect (cons v k)))
-	   (sorted-constants (sort index-constants #'< :key #'car))
-	   (pool-items (mapcar #'cdr sorted-constants)))
-      ;; convert to bytes; length is 1+ actual number of constants
-      (list (u2 (1+ (constant-pool-size pool)))
-	    (loop for p in pool-items
-		  collect (apply #'constant-info-bytes pool p))))))
-
 (defmacro def-jconstant (name tag slots &body body)
   (with-gensyms (pool const-type)
     `(progn
-       ;; each struct is a list with the constant type as the first value
-       ;; this is so constants can be (portably) used as hash table keys
+       ;; Each struct is a list with the constant type as the first value.
+       ;; This is so constants can be (portably) used as hash table keys.
        (defstruct (,name (:type list) :named
 			 (:constructor ,(symbol-concatenate "MAKE-" name)
 			   ,slots))
 	 ,@slots)
 
-       ;; resolve constant specializes on the constant type 
-       ;; via (apply pool #'resolve-constant constant-struct)
+       ;; Resolve constant specializes on the constant type
+       ;; via (apply pool #'resolve-constant constant-struct).
        (defmethod resolve-constant (,pool (,const-type (eql ',name)) &rest data)
 	 (pool-index ,pool (cons ',name data))
-	 ;; locally define u2-pool-index to resolve dependencies
+	 ;; Locally define u2-pool-index to resolve dependencies.
 	 (flet ((u2-pool-index (const)
 		    (apply #'resolve-constant ,pool const)))
 	   (declare (ignorable (function u2-pool-index)))
@@ -67,7 +34,7 @@ first if it does not already exist in the pool."
 	     ,@body)))
 
        (defmethod constant-info-bytes (,pool (,const-type (eql ',name)) &rest data)
-	 ;; locally define u2-pool-index to get the dependency index
+	 ;; Locally define u2-pool-index to get the dependency index.
 	 (flet ((u2-pool-index (const)
 		  (u2 (pool-index ,pool const))))
 	   (declare (ignorable (function u2-pool-index)))
@@ -141,10 +108,45 @@ first if it does not already exist in the pool."
 (def-jconstant package-info 20 (name)
   (u2-pool-index (make-utf8-info name)))
 
+;; Constant pool assembly
+
+(defun pool-index (pool constant)
+  "Looks up the index of the constant in the constant pool. Inserts the constant
+first if it does not already exist in the pool."
+  (let ((index (gethash constant (constant-pool-table pool))))
+    (cond
+      (index)
+      (t
+       (setf (gethash constant (constant-pool-table pool))
+	     (incf (constant-pool-size pool)))
+       ;; The slot following an 8 byte constant is empty.
+       (when (or (long-info-p constant)
+		 (double-info-p constant))
+	 (incf (constant-pool-size pool)))))))
+
+(defun constant-pool-bytes (pool)
+  "Converts a constant pool to a (nested) list of bytes."
+  ;; First resolve all constants.
+  (let ((pool-table (constant-pool-table pool)))
+    ;; Don't modify the hash table while iterating over it!
+    (loop for key in (loop for k being the hash-keys of pool-table
+			   collect k)
+	  do (apply #'resolve-constant pool key))
+    ;; Sort constants by index.
+    (let* ((index-constants (loop for k being the hash-keys of pool-table
+				    using (hash-value v)
+				  collect (cons v k)))
+	   (sorted-constants (sort index-constants #'< :key #'car))
+	   (pool-items (mapcar #'cdr sorted-constants)))
+      ;; Convert to bytes; length is 1+ actual number of constants.
+      (list (u2 (1+ (constant-pool-size pool)))
+	    (loop for p in pool-items
+		  collect (apply #'constant-info-bytes pool p))))))
+
 ;; Constant pool disassembly
 
 (defun allocate-constant (bytes)
-  ;; first pass over constant pool: split into entries
+  ;; First pass over constant pool: split into entries
   (let ((tag (parse-u1 bytes)))
     (cons
      tag
@@ -169,10 +171,10 @@ first if it does not already exist in the pool."
 		 :message (format nil "Unknown tag ~A in constant pool" tag)))))))
 
 (defun build-constant (pool index)
-  ;; second pass over constant pool: build constants and resolve dependencies
+  ;; Second pass over constant pool: build constants and resolve dependencies
   (let* ((constant (aref pool index))
 	 (tag (first constant)))
-    (if (symbolp tag) ; already built constants begin with symbols
+    (if (symbolp tag) ; Already built constants begin with symbols
 	constant
 	(setf
 	 (aref pool index)
@@ -225,18 +227,18 @@ first if it does not already exist in the pool."
 	   (t constant))))))
 
 (defun parse-constant-pool (bytes)
-  ;; constants are 1-indexed AND the size is 1 more than the actual count
-  (let* ((size (1- (parse-u2 bytes)))
-	 (pool (make-array (1+ size) :initial-element nil)))
-    (loop for i from 1 upto size do
+  ;; Constants are 1-indexed and the size is 1 more than the actual count.
+  (let ((pool (make-array (parse-u2 bytes) :initial-element nil)))
+    (loop for i from 1 upto (1- (length pool)) do
       (setf (aref pool i)
 	    (let* ((constant (allocate-constant bytes))
 		   (tag (first constant)))
-	      ;; increment if long or double
+	      ;; JVM Spec 4.4.5: 8 byte constants take two pool entries.
+	      ;; The constant_pool index n+1 must be valid but is considered unusable.
 	      (when (or (= tag 5) (= tag 6))
 		(incf i))
 	      constant)))
-    ;; parse dependencies
+    ;; Parse dependencies
     (loop for i from 1 upto size
 	  do (build-constant pool i))
     pool))

@@ -110,7 +110,7 @@
   (def-serialization with-length (unit list fields &rest body) stream
     (with-gensyms (term)
       (assert (member unit '(u1 u2 u4) :test 'eq) (unit)
-	      "Length unit ~S is must be u1, u2, or u4." unit)
+	      "Length unit is ~S but must be u1, u2, or u4." unit)
       `(list
 	(,unit (length ,list))
 	(mapcar (lambda (&rest ,term)

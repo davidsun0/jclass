@@ -11,68 +11,68 @@
   (make-array 256 :initial-element nil))
 
 (fresh-dolist (simple-instruction
-	 '((#x00 :nop)
-	   ;; constants
-	   (#x01 :aconst-null)
-	   (#x02 :iconst-m1)
-	   (#x03 :iconst-0) (#x04 :iconst-1) (#x05 :iconst-2)
-	   (#x06 :iconst-3) (#x07 :iconst-4) (#x08 :iconst-5)
-	   (#x09 :lconst-0) (#x0A :lconst-1)
-	   (#x0B :fconst-0) (#x0C :fconst-1) (#x0D :fconst-2)
-	   (#x0E :dconst-0) (#x0F :dconst-1)
-	   ;; loads
-	   (#x1A :iload-0) (#x1B :iload-1) (#x1C :iload-2) (#x1D :iload-3)
-	   (#x1E :lload-0) (#x1F :lload-1) (#x20 :lload-2) (#x21 :lload-3)
-	   (#x22 :fload-0) (#x23 :fload-1) (#x24 :fload-2) (#x25 :fload-3)
-	   (#x26 :dload-0) (#x27 :dload-1) (#x28 :dload-2) (#x29 :dload-3)
-	   (#x2A :aload-0) (#x2B :aload-1) (#x2C :aload-2) (#x2D :aload-3)
-	   (#x2E :iaload) (#x2F :laload) (#x30 :faload) (#x31 :daload)
-	   (#x32 :aaload) (#x33 :baload) (#x34 :caload) (#x35 :saload)
-	   ;; stores
-	   (#x3B :istore-0) (#x3C :istore-1) (#x3D :istore-2) (#x3E :istore-3)
-	   (#x3F :lstore-0) (#x40 :lstore-1) (#x41 :lstore-2) (#x42 :lstore-3)
-	   (#x43 :fstore-0) (#x44 :fstore-1) (#x45 :fstore-2) (#x46 :fstore-3)
-	   (#x47 :dstore-0) (#x48 :dstore-1) (#x49 :dstore-2) (#x4A :dstore-3)
-	   (#x4B :astore-0) (#x4C :astore-1) (#x4D :astore-2) (#x4E :astore-3)
-	   (#x4F :iastore) (#x50 :lastore) (#x51 :fastore) (#x52 :dastore)
-	   (#x53 :aastore) (#x54 :bastore) (#x55 :castore) (#x56 :sastore)
-	   ;; stack
-	   (#x57 :pop) (#x58 :pop2)
-	   (#x59 :dup)  (#x5A :dup-x1)  (#x5B :dup-x2)
-	   (#x5C :dup2) (#x5D :dup2-x1) (#x5E :dup2-x2)
-	   (#x5F :swap)
-	   ;; math
-	   (#x60 :iadd) (#x61 :ladd) (#x62 :fadd) (#x63 :dadd)
-	   (#x64 :isub) (#x65 :lsub) (#x66 :fsub) (#x67 :dsub)
-	   (#x68 :imul) (#x69 :lmul) (#x6A :fmul) (#x6B :dmul)
-	   (#x6C :idiv) (#x6D :ldiv) (#x6E :fdiv) (#x6F :ddiv)
-	   (#x70 :irem) (#x71 :lrem) (#x72 :frem) (#x73 :drem)
-	   (#x74 :ineg) (#x75 :lneg) (#x76 :fneg) (#x77 :dneg)
-	   (#x78 :ishl) (#x79 :lshl)
-	   (#x7A :ishr) (#x7B :lshr)
-	   (#x7C :iushr) (#x7D :lushr)
-	   (#x7E :iand) (#x7F :land)
-	   (#x80 :ior) (#x81 :lor)
-	   (#x82 :ixor) (#x83 :lxor)
-	   ;; conversion
-	   (#x85 :i2l) (#x86 :i2f) (#x87 :i2d)
-	   (#x88 :l2i) (#x89 :l2f) (#x8A :l2d)
-	   (#x8B :f2i) (#x8C :f2l) (#x8D :f2d)
-	   (#x8E :d2i) (#x8F :d2l) (#x90 :d2f)
-	   (#x91 :i2b) (#x92 :i2c) (#x93 :i2s)
-	   ;; comparison
-	   (#x94 :lcmp)
-	   (#x95 :fcmpl) (#x96 :fcmpg)
-	   (#x97 :dcmpl) (#x98 :dcmpg)
-	   ;; references
-	   (#xBE :arraylength)
-	   (#xBF :athrow)
-	   (#xC2 :monitorenter) (#xC3 :monitorexit)
-	   ;; control flow
-	   (#xAC :ireturn) (#xAD :lreturn) (#xAE :freturn)
-	   (#xAF :dreturn) (#xB0 :areturn) (#xB1 :return)
-	   ;; reserved
-	   (#xCA :breakpoint) (#xFE :impdep1) (#xFF :impdep2)))
+	       '((#x00 :nop)
+		 ;; constants
+		 (#x01 :aconst-null)
+		 (#x02 :iconst-m1)
+		 (#x03 :iconst-0) (#x04 :iconst-1) (#x05 :iconst-2)
+		 (#x06 :iconst-3) (#x07 :iconst-4) (#x08 :iconst-5)
+		 (#x09 :lconst-0) (#x0A :lconst-1)
+		 (#x0B :fconst-0) (#x0C :fconst-1) (#x0D :fconst-2)
+		 (#x0E :dconst-0) (#x0F :dconst-1)
+		 ;; loads
+		 (#x1A :iload-0) (#x1B :iload-1) (#x1C :iload-2) (#x1D :iload-3)
+		 (#x1E :lload-0) (#x1F :lload-1) (#x20 :lload-2) (#x21 :lload-3)
+		 (#x22 :fload-0) (#x23 :fload-1) (#x24 :fload-2) (#x25 :fload-3)
+		 (#x26 :dload-0) (#x27 :dload-1) (#x28 :dload-2) (#x29 :dload-3)
+		 (#x2A :aload-0) (#x2B :aload-1) (#x2C :aload-2) (#x2D :aload-3)
+		 (#x2E :iaload) (#x2F :laload) (#x30 :faload) (#x31 :daload)
+		 (#x32 :aaload) (#x33 :baload) (#x34 :caload) (#x35 :saload)
+		 ;; stores
+		 (#x3B :istore-0) (#x3C :istore-1) (#x3D :istore-2) (#x3E :istore-3)
+		 (#x3F :lstore-0) (#x40 :lstore-1) (#x41 :lstore-2) (#x42 :lstore-3)
+		 (#x43 :fstore-0) (#x44 :fstore-1) (#x45 :fstore-2) (#x46 :fstore-3)
+		 (#x47 :dstore-0) (#x48 :dstore-1) (#x49 :dstore-2) (#x4A :dstore-3)
+		 (#x4B :astore-0) (#x4C :astore-1) (#x4D :astore-2) (#x4E :astore-3)
+		 (#x4F :iastore) (#x50 :lastore) (#x51 :fastore) (#x52 :dastore)
+		 (#x53 :aastore) (#x54 :bastore) (#x55 :castore) (#x56 :sastore)
+		 ;; stack
+		 (#x57 :pop) (#x58 :pop2)
+		 (#x59 :dup)  (#x5A :dup-x1)  (#x5B :dup-x2)
+		 (#x5C :dup2) (#x5D :dup2-x1) (#x5E :dup2-x2)
+		 (#x5F :swap)
+		 ;; math
+		 (#x60 :iadd) (#x61 :ladd) (#x62 :fadd) (#x63 :dadd)
+		 (#x64 :isub) (#x65 :lsub) (#x66 :fsub) (#x67 :dsub)
+		 (#x68 :imul) (#x69 :lmul) (#x6A :fmul) (#x6B :dmul)
+		 (#x6C :idiv) (#x6D :ldiv) (#x6E :fdiv) (#x6F :ddiv)
+		 (#x70 :irem) (#x71 :lrem) (#x72 :frem) (#x73 :drem)
+		 (#x74 :ineg) (#x75 :lneg) (#x76 :fneg) (#x77 :dneg)
+		 (#x78 :ishl) (#x79 :lshl)
+		 (#x7A :ishr) (#x7B :lshr)
+		 (#x7C :iushr) (#x7D :lushr)
+		 (#x7E :iand) (#x7F :land)
+		 (#x80 :ior) (#x81 :lor)
+		 (#x82 :ixor) (#x83 :lxor)
+		 ;; conversion
+		 (#x85 :i2l) (#x86 :i2f) (#x87 :i2d)
+		 (#x88 :l2i) (#x89 :l2f) (#x8A :l2d)
+		 (#x8B :f2i) (#x8C :f2l) (#x8D :f2d)
+		 (#x8E :d2i) (#x8F :d2l) (#x90 :d2f)
+		 (#x91 :i2b) (#x92 :i2c) (#x93 :i2s)
+		 ;; comparison
+		 (#x94 :lcmp)
+		 (#x95 :fcmpl) (#x96 :fcmpg)
+		 (#x97 :dcmpl) (#x98 :dcmpg)
+		 ;; references
+		 (#xBE :arraylength)
+		 (#xBF :athrow)
+		 (#xC2 :monitorenter) (#xC3 :monitorexit)
+		 ;; control flow
+		 (#xAC :ireturn) (#xAD :lreturn) (#xAE :freturn)
+		 (#xAF :dreturn) (#xB0 :areturn) (#xB1 :return)
+		 ;; reserved
+		 (#xCA :breakpoint) (#xFE :impdep1) (#xFF :impdep2)))
   (destructuring-bind (code instruction) simple-instruction
     (setf (gethash instruction *bytecode-encoders*) (list code))
     (setf (aref *bytecode-decoders* code) instruction)))
@@ -97,9 +97,9 @@
   (list (signed-8 (parse-u1 bytes))))
 
 (fresh-dolist (u1-instruction
-	 '((#x15 :iload)  (#x16 :lload)  (#x17 :fload)  (#x18 :dload)  (#x19 :aload)
-	   (#x36 :istore) (#x37 :lstore) (#x38 :fstore) (#x39 :dstore) (#x3A :astore)
-	   (#xA9 :ret) (#xBC :newarray)))
+	       '((#x15 :iload)  (#x16 :lload)  (#x17 :fload)  (#x18 :dload)  (#x19 :aload)
+		 (#x36 :istore) (#x37 :lstore) (#x38 :fstore) (#x39 :dstore) (#x3A :astore)
+		 (#xA9 :ret) (#xBC :newarray)))
   (destructuring-bind (code instruction) u1-instruction
     (define-encoding instruction code
       (u1 (first operands))
@@ -110,15 +110,15 @@
   (list (signed-16 (parse-u2 bytes))))
 
 (fresh-dolist (branch-instruction
-	 '((#x99 :ifeq) (#x9A :ifne)
-	   (#x9B :iflt) (#x9C :ifge) (#x9D :ifgt) (#x9E :ifle)
-	   (#x9F :if-icmpeq) (#xA0 :if-icmpne)
-	   (#xA1 :if-icmplt) (#xA2 :if-icmpge)
-	   (#xA3 :if-icmpgt) (#xA4 :if-icmple)
-	   (#xA5 :if-acmpeq) (#xA6 :if-acmpne)
-	   (#xA7 :goto)
-	   (#xA8 :jsr)
-	   (#xC6 :ifnull) (#xC7 :ifnonnull)))
+	       '((#x99 :ifeq) (#x9A :ifne)
+		 (#x9B :iflt) (#x9C :ifge) (#x9D :ifgt) (#x9E :ifle)
+		 (#x9F :if-icmpeq) (#xA0 :if-icmpne)
+		 (#xA1 :if-icmplt) (#xA2 :if-icmpge)
+		 (#xA3 :if-icmpgt) (#xA4 :if-icmple)
+		 (#xA5 :if-acmpeq) (#xA6 :if-acmpne)
+		 (#xA7 :goto)
+		 (#xA8 :jsr)
+		 (#xC6 :ifnull) (#xC7 :ifnonnull)))
   (destructuring-bind (code instruction) branch-instruction
     (define-encoding instruction code
       (u2 (- (first operands) offset))
@@ -193,10 +193,10 @@
 			      (signed-32 (parse-u4 bytes)))))))
 
 (fresh-dolist (field-instruction
-	 '((#xB2 :getstatic)
-	   (#xB3 :putstatic)
-	   (#xB4 :getfield)
-	   (#xB5 :putfield)))
+	       '((#xB2 :getstatic)
+		 (#xB3 :putstatic)
+		 (#xB4 :getfield)
+		 (#xB5 :putfield)))
   (destructuring-bind (code instruction) field-instruction
     (define-encoding instruction code
       (destructuring-bind (class-name name type) operands
@@ -313,10 +313,10 @@
 	  (invoke-dynamic-info-type dynamic-ref))))
 
 (fresh-dolist (class-instruction
-	 '((#xBB :new)
-	   (#xBD :anewarray)
-	   (#xC0 :checkcast)
-	   (#xC1 :instanceof)))
+	       '((#xBB :new)
+		 (#xBD :anewarray)
+		 (#xC0 :checkcast)
+		 (#xC1 :instanceof)))
   (destructuring-bind (code instruction) class-instruction
     (define-encoding instruction code
       (let ((class-ref (make-class-info (first operands))))
@@ -432,17 +432,18 @@
 	    do (incf offset (instruction-length instruction pool offset))
 	  finally (return label-table))))
 
-(defgeneric encode-bytecode (instructions constant-pool)
-  (:documentation "Encodes bytecode instructions to a list of bytes.")
-  (:method ((instructions array) constant-pool)
-    (coerce instructions 'list))
-  (:method ((instructions list) constant-pool)
-    (loop for instruction in instructions
-	  for offset = 0 then offset
-	  for bytes = (encode-instruction instruction constant-pool offset)
-	  do (incf offset (if (integerp bytes) 1 (length bytes)))
-	  collect bytes into output
-	  finally (return (flatten output)))))
+(defun encode-bytecode (instructions constant-pool)
+  "Encodes bytecode instructions to a list of bytes."
+  (etypecase instructions
+    (array
+     (coerce instructions 'list))
+    (list
+     (loop for instruction in instructions
+	   for offset = 0 then offset
+	   for bytes = (encode-instruction instruction constant-pool offset)
+	   do (incf offset (if (integerp bytes) 1 (length bytes)))
+	   collect bytes into output
+	   finally (return (flatten output))))))
 
 (defun decode-bytecode (code-bytes constant-pool)
   (let ((bytecode-length (parse-u4 code-bytes))
