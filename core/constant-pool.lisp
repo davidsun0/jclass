@@ -114,15 +114,14 @@
   "Looks up the index of the constant in the constant pool. Inserts the constant
 first if it does not already exist in the pool."
   (let ((index (gethash constant (constant-pool-table pool))))
-    (cond
-      (index)
-      (t
-       (setf (gethash constant (constant-pool-table pool))
-	     (incf (constant-pool-size pool)))
-       ;; The slot following an 8 byte constant is empty.
-       (when (or (long-info-p constant)
-		 (double-info-p constant))
-	 (incf (constant-pool-size pool)))))))
+    (unless index
+      (setf index (incf (constant-pool-size pool)))
+      (setf (gethash constant (constant-pool-table pool)) index)
+      ;; The slot following an 8 byte constant is empty.
+      (when (or (long-info-p constant)
+		(double-info-p constant))
+	(incf (constant-pool-size pool))))
+    index))
 
 (defun constant-pool-bytes (pool)
   "Converts a constant pool to a (nested) list of bytes."
@@ -239,6 +238,6 @@ first if it does not already exist in the pool."
 		(incf i))
 	      constant)))
     ;; Parse dependencies
-    (loop for i from 1 upto size
+    (loop for i from 1 upto (1- (length pool))
 	  do (build-constant pool i))
     pool))

@@ -19,6 +19,14 @@
   (fiveam:is (= 2 (jclass::interface-count "([D)V")))
   (fiveam:is (= 2 (jclass::interface-count "([[[Ljava/lang/Object;)V"))))
 
+(fiveam:test pool-index
+  (let ((pool (jclass::make-constant-pool)))
+    (fiveam:is (= 1 (jclass::pool-index pool (jclass::make-integer-info 1))))
+    (fiveam:is (= 2 (jclass::pool-index pool (jclass::make-long-info 123))))
+    (fiveam:is (= 4 (jclass::pool-index pool (jclass::make-double-info 0d0))))
+    (fiveam:is (= 6 (jclass::pool-index pool (jclass::make-utf8-info "hi"))))
+    (fiveam:is (= 7 (jclass::constant-pool-size pool)))))
+
 ;;; Testing jclass against files created by javac
 ;; (1) Decode class from file
 ;; (2) Build a constant pool with the same indicies
