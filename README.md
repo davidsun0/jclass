@@ -1,13 +1,26 @@
 # jclass: Java Class File Builder
 
-jclass builds, assembles, and disassembles Java class files in Common Lisp,
-making it easy to develop low level code for the JVM.
+jclass makes it easy to generate and analyze Java class files in Common Lisp.
+Build a compiler backend or a JVM bytecode analyzer with jclass!
+
+Java classes, fields, methods, annotations, and more are represented as Lisp
+objects for easy analysis and manipulation. jclass also automatically builds
+the constant pool for you (but you can still make the pool manually if you
+want!)
+
+It's also possible to create custom class attributes with jclass.
+An attribute description DSL makes it easy to add new attributes. Great for
+targeting custom JVMs or experimental features.
+
+jclass is feature complete and the API is mostly stable. jclass will be updated
+with new JVM features whenever they are released, so do not `(:use #:jclass)` in
+your packages.
 
 ## Hello World Example
 
 For in-depth information, see the [manual](MANUAL.md).
 
-```
+```lisp
 ;; Build the main method
 (defparameter *main*
   (make-instance 'jclass:method-info
@@ -49,7 +62,7 @@ For in-depth information, see the [manual](MANUAL.md).
 
 The class file executes as expected:
 
-```
+```bash
 $ java Hello
 Hello, world!
 ```
@@ -103,6 +116,30 @@ Constant pool:
 }
 ```
 
+## Installation
+
+### Manual Install
+
+jclass is currently not in Quicklisp or Ultralisp.
+
+Install by cloning to your `~/common-lisp/` or `quicklisp/local-projects/`
+directories.
+
+Then run the following:
+```lisp
+(ql:register-local-projects)
+(asdf:load-system "jclass")
+```
+
+### Roswell Install
+
+If you have [Roswell](https://github.com/roswell/roswell), you can install from
+Github.
+
+```sh
+$ ros install davidsun0/jclass
+```
+
 ## Portability / Compatibility
 
 jclass should work on conforming Common Lisps with the following features:
@@ -120,26 +157,6 @@ flags are incompatible. Some features may only work with certain class file
 versions. jclass does not ensure that a JVM will accept a generated class.
 
 It is up to the user to correctly match class file features.
-
-## Current Status
-
-jclass is in its still in development. The API is mostly stable, but there
-may be more symbols exported in the future. For that reason, do not `(:use :jclass)`
-in your packages.
-
-### Planned Feature: Bytecode Offsets
-
-In their raw form, these attributes work with bytecode offsets.
-The bytecode layer makes calculating offsets easy with the `label`
-pseudoinstruction.
-
-- [ ] Code attribute
-- [ ] StackMapTable attribute
-- [ ] LineNumberTable attribute
-- [ ] LocalVariableTable attribute
-- [ ] LocalVariableTypeTable attribute
-- [ ] RuntimeVisibleTypeAnnotations attribute
-- [ ] RuntimeInvisibleTypeAnnotations attribute
 
 ### Implemented Structures by JVM Spec Section
 
@@ -204,18 +221,10 @@ The class file is represented as a tree of objects. Every named structure in
 the JVM Specification has an equivalent Lisp object.
 
 There are functions to assemble and disassemble a `java-class` object to
-and from a `.class` file. Note that fields, methods, and attributes cannot be
-serialized or deserialized outside of a class: they require a class file's
-constant pool.
-
-jclass is built up in these layers:
-
-- `constant-pool.lisp`: handles constant resolution and byte I/O
-- `structures.lisp`: defines class, field, method, and attribute structures and
-how they are (de)serialized
-- `bytecode.lisp`: (dis)assembles bytecode
+and from a `.class` file. As fields, methods, and attributes are part of a
+class, they cannot be serialized independently.
 
 ## License
 
-jclass is released under the MIT License.
+MIT
 

@@ -25,7 +25,7 @@
     (fiveam:is (= 2 (jclass::pool-index pool (jclass::make-long-info 123))))
     (fiveam:is (= 4 (jclass::pool-index pool (jclass::make-double-info 0d0))))
     (fiveam:is (= 6 (jclass::pool-index pool (jclass::make-utf8-info "hi"))))
-    (fiveam:is (= 7 (jclass::constant-pool-size pool)))))
+    (fiveam:is (= 6 (jclass::constant-pool-size pool)))))
 
 ;;; Testing jclass against files created by javac
 ;; (1) Decode class from file
@@ -48,7 +48,7 @@
     (jclass:assemble-jclass jclass (recreate-pool pool-array))))
 
 (defun test-file-path (name)
-  (let ((local-path (format nil "core.test/data/~A.class" name)))
+  (let ((local-path (format nil "tests/data/~A.class" name)))
     (asdf:system-relative-pathname "jclass" local-path)))
 
 (defun test-class-file (filename)
@@ -60,20 +60,6 @@
 	   (buffer (make-array length :element-type '(unsigned-byte 8))))
       (read-sequence buffer stream)
       (equal (coerce buffer 'list) (re-encode-class buffer)))))
-
-(defun dump-re-encode (name output-path)
-  (with-open-file (input (test-file-path name)
-			 :direction :input
-			 :element-type '(unsigned-byte 8)
-			 :if-does-not-exist :error)
-    (let* ((length (file-length input))
-	   (buffer (make-array length :element-type '(unsigned-byte 8))))
-      (read-sequence buffer input)
-      (with-open-file (output output-path
-			      :direction :output
-			      :if-exists :supersede
-			      :element-type '(unsigned-byte 8))
-	(write-sequence (re-encode-class buffer) output)))))
 
 (fiveam:test serialization
   (fiveam:is (test-class-file "Hello")

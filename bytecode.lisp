@@ -192,11 +192,10 @@
 		collect (list (signed-32 (parse-u4 bytes))
 			      (signed-32 (parse-u4 bytes)))))))
 
-(fresh-dolist (field-instruction
-	       '((#xB2 :getstatic)
-		 (#xB3 :putstatic)
-		 (#xB4 :getfield)
-		 (#xB5 :putfield)))
+(fresh-dolist (field-instruction '((#xB2 :getstatic)
+				   (#xB3 :putstatic)
+				   (#xB4 :getfield)
+				   (#xB5 :putfield)))
   (destructuring-bind (code instruction) field-instruction
     (define-encoding instruction code
       (destructuring-bind (class-name name type) operands
