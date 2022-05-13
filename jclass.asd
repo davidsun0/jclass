@@ -1,31 +1,25 @@
 ;;;; -*- Mode: Lisp; Syntax: ANSI-Common-Lisp; Base: 10 -*-
 
 (defsystem "jclass"
-  :version "0.2.1"
+  :version "1.0.0"
   :author "David Sun"
   :license "MIT"
   :description "Java class file manipulation"
   :depends-on ("float-features")
   :components
   ((:file "package")
-   (:module "bytecode"
-	    :depends-on ("package")
-	    :serial t
-	    :components
-	    ((:file "encoding")))
-   (:module "class"
-	    :depends-on ("package" "bytecode")
-	    :serial t
-	    :components
-	    ((:file "constant-pool")
-	     (:file "structures")
-	     (:file "jclass"))))
+   (:file "utility" :depends-on ("package"))
+   (:file "constant-pool" :depends-on ("utility"))
+   (:file "bytecode" :depends-on ("constant-pool"))
+   (:file "structures" :depends-on ("bytecode" "constant-pool"))
+   (:file "print-object" :depends-on ("structures"))
+   (:file "jclass" :depends-on ("structures")))
   :in-order-to ((test-op (test-op "jclass/tests"))))
 
 (defsystem "jclass/tests"
   :depends-on ("jclass" "fiveam")
   :components
-  ((:module "test"
+  ((:module "tests"
     :serial t
     :components ((:file "package")
 		 (:file "modified-utf8")

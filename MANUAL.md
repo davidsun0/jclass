@@ -5,9 +5,49 @@ I recommend reading the
 [Java Virtual Machine Specification](https://docs.oracle.com/javase/specs/index.html)
 first.
 
-jclass is built from the perspective of the Java Virtual Machine, and not from
-that of the Java Programming Language. There are important differences that are
-covered not covered in this manual.
+jclass is built to the JVM specification, not to the Java language specification.
+That means that jclass can make class files that could not be compiled from a
+Java program.
+
+### Table of Contents
+
+- [Java Classes](#java-classes)
+- [Fields](#fields)
+- [Methods](#methods)
+- [Constant Pool](#constants)
+- [Attributes](#attributes)
+    - [Constant Value Attribute](#constant-value-attribute)
+    - [Code Attribute](#code-attribute)
+    - [Stack Map Table Attribute](#stack-map-table-attribute)
+    - [Exceptions Attribute](#exceptions-attribute)
+    - [Inner Classes Attribute](#inner-classes-attribute)
+    - [Enclosing Method Attribute](#enclosing-method-attribute)
+    - [Synthetic Attribute](#synthetic-attribute)
+    - [Signature Attribute](#signature-attribute)
+    - [Source File Attribute](#source-file-attribute)
+    - [Source Debug Extension Attribute](#source-debug-extension-attribute)
+    - [Line Number Table Attribute](#line-number-table-attribute)
+    - [Local Variable Table Attribute](#local-variable-table-attribute)
+    - [Local Variable Type Table Attribute](#local-variable-type-table-attribute)
+    - [Deprecated Attribute](#deprecated-attribute)
+    - [Annotations](#annotations)
+        - [Runtime Visible Annotations Attribute](#annotations)
+        - [Runtime Invisible Annotations Attribute](#annotations)
+        - [Runtime Visible Parameter Annotations Attribute](#annotations)
+        - [Runtime Invisible Parameter Annotations Attribute](#annotations)
+    - [Type Annotations](#type-annotations)
+        - [Runtime Visible Type Annotations Attribute](#annotations)
+        - [Runtime Invisible Type Annotations Attribute](#annotations)
+    - [Annotation Default Attribute](#annotation-default-attribute)
+    - [Bootstrap Methods Attribute](#bootstrap-methods-attribute)
+    - [Method Parameters Attribute](#method-parameters-attribute)
+    - [Module Attribute](#module-attribute)
+    - [Module Packages Attribute](#module-packages-attribute)
+    - [Module Main Class Attribute](#module-main-class-attribute)
+    - [Nest Host Attribute](#nest-host-attribute)
+    - [Record Attribute](#record-attribute)
+    - [Permitted Subclasses Attribute](#permitted-subclasses-attribute)
+    - [Creating Custom Attributes](#creating-custom-attributes)
 
 ## Java Classes
 
@@ -27,7 +67,7 @@ covered not covered in this manual.
 - *major-version*: a 16-bit Java Class major version
 - *flags*: a list of keywords from this set: `:public :final :super :interface
 :abstract :synthetic :annotation :enum :module`
-- *name*: this class's [name](#binary-names) string
+- *name*: this class's name string
 - *parent*: this class's parent's name string
 - *interfaces*: a list of implemented interface name strings
 - *fields*: a list of [field](#fields) structures
@@ -73,23 +113,24 @@ See [Optional Constants](#optional-constants) for details.
 Direct superclasses: `error`
 
 A `class-format-error` condition represents errors related to malformed Java
-class files.
+class files. A `class-format-error` may be signaled both when parsing a
+malformed class or when generating a malformed class.
 
-jclass only signals a `class-format-error` for structural issues.
-It is possible to creat a class file that is structurally valid, but invalid
-according to the semantics of the JVM, in which case no error is signaled.
-For example, it is possible to create a class that extends and interface or
-implements a class. On the other hand, jclass *will* signal an error for
-issues like an invalid annotation value, which prevents further parsing.
+`class-format-error`s are
 
-> Fun trivia: You can annotate method, fields, etc. with classes that don't
+- only signaled for structural issues (e.g. invalid annotation values)
+- not signaled for semantic issues (e.g. putting a class in a class'
+implementing interface list)
+- not always going to prevent or notify you when generating malformed classes
+
+> Fun fact: You can annotate method, fields, etc. with classes that don't
 > implement `java.lang.annotations.Annotation`! In fact, you can annotate things
 > with pretty much anything - integer literals, strings, you name it. OpenJDK's
 > HotSpot gladly accepts and runs these classes. Trying to read the annotation
 > with reflection does throw a `java.lang.annotation.AnnotationFormatError` though.
 >
-> Of course, jclass will not signal a `class-format-error` when generating such
-> a malformed class.
+> This is an example of when jclass does not signal a `class-format-error` when
+> generating or parsing a malformed class.
 
 ## Fields
 
@@ -132,24 +173,27 @@ the class or interface they represent. Therefore the interfaces list of a
 `java-class` structure might be `(list "java/lang/Comparable"
 "java/lang/Iterable")`.
 
-The astute may realize that a class info constant does not actually contain a
-string, but instead references a `UTF8_info` that does. This is because the
-reference is also unambiguous in its type. As a result,
-constants in jclass are created with the minimal amount of information needed.
+The astute may notice that a class info constant does not actually contain a
+string, but instead references a `UTF8_info` that does.
+Since `UTF8_info` is also unambiguous in its component type, jclass is able to
+infer all relevant types at class generation time.
 
 ### Ambiguous Constant Types
 
 When the constant type *is* ambiguous, the user must pass a constant explicitly.
+Constants are created with the `make-\*-info` functions.
 
-Places where constant type is ambiguous:
+Instructions that take multiple constant types:
 - `ldc` and `ldc_w` takes any loadable constant
 - `ldc2_w` takes a `Long_info` or a `Double_info`
 - `invokespecial` takes a `Methodref_info` or a `InterfaceMethodref_info`
 constant
-- Several attributes can take multiple constant types:
-    - The ConstantValue attribute may take one of several constants.
-        - See the JVM Spec, Table 4.7.2-A for details
-    - The BoostrapMethods attribute may take one of several constants.
+
+Attributes that take multiple constant types:
+- The ConstantValue attribute may take one of several constants.
+    - See the JVM Spec, Table 4.7.2-A for details.
+- The BoostrapMethods attribute may take any loadable constant.
+    - See the JVM Spec, Table 4.4-C for details.
 
 ### Optional Constants
 
@@ -172,6 +216,9 @@ Unicode characters may be used if each element of *string* represents a code poi
 [Function] **integer-info-p** object => boolean
 
 - *integer*: an 32-bit signed integer
+
+Internally, the Java Virtual Machine also uses `int`s for booleans, bytes,
+chars, and shorts. Boolean true is 1 and false is 0.
 
 [Function] **make-float-info** value => float-info \
 [Accessor] **float-info-value** float-info => value \
@@ -342,7 +389,6 @@ Examples of bytecode instructions:
     - Match and offset values are 32-bit signed integers
     - Padding is automatically calculated
 - `wide`: `(:wide :iinc 300 500)` `(:wide :fstore 300)`
-- `label` pseudo instruction: `(:label "loop")`
 
 ### Stack Map Table Attribute
 
@@ -447,9 +493,7 @@ generics. See the JVM Spec 4.7.9.1 for signature formats.
 
 [Accessor] **debug** source-debug-extension => debug
 
-- *debug*: an array of unsigned bytes
-
-The binary format of *debug* is not specified by the Java Virtual Machine.
+- *debug*: a string
 
 ### Line Number Table Attribute
 
@@ -513,10 +557,10 @@ The Deprecated attribute has no slots.
 | char   | `#\C` | a character with a code point of U+FFFF or below |
 | double | `#\D` | a `double-float` (IEEE 754 64-bit float)         |
 | float  | `#\F` | a `single-float` (IEEE 754 32-bit float)         |
-| int    | `#\I` | a 32-bit integer                                 |
-| long   | `#\J` | a 64-bit integer                                 |
-| short  | `#\S` | a 16-bit integer                                 |
-| boolean| `#\Z` | 0 or 1                                           |
+| int    | `#\I` | a signed 32-bit integer                          |
+| long   | `#\J` | a signed 64-bit integer                          |
+| short  | `#\S` | a signed 16-bit integer                          |
+| boolean| `#\Z` | 0 for false or 1 for true                        |
 | String | `#\s` | a string                                         |
 | Enum   | `#\e` | a list of an enum type and value                 |
 | Class  | `#\@` | an annotation                                    |
@@ -530,7 +574,7 @@ The Deprecated attribute has no slots.
 [Accessor] **annotations** runtime-visible-annotations => annotations \
 [Accessor] **annotations** runtime-invisible-annotations => annotations \
 [Accessor] **annotations**
-runtime-visible-parameter-parameter-annotations => annotations \
+runtime-visible-parameter-annotations => annotations \
 [Accessor] **annotations**
 runtime-invisible-parameter-annotations => annotations
 
@@ -703,7 +747,11 @@ See the JVM Spec 4.4.8 for details on bootstrap kinds and references
 ### Creating Custom Attributes
 
 The Java Virtual Machine Specification says that the class file format can be
-extended with custom attributes.
+extended with custom attributes. jclass makes attribute definition easy with the
+`def-attribute` macro.
+
+**The `def-attribute` API is not 100% stable and is not exported. Use with
+caution.**
 
 See the implementations for the standard attributes. Each attribute is defined
 with through a DSL that automatically generates and installs serialization and
@@ -713,6 +761,4 @@ code necessary.
 
 Attribute definitions implicitly add the six byte header which contains the
 index of the attribute name and the length of the attribute in bytes.
-
-The structure DSL can be expanded with the macro `def-serialization`.
 

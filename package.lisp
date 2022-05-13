@@ -1,5 +1,3 @@
-(in-package :cl-user)
-
 (defpackage #:jclass
   (:use :cl)
   (:shadow #:class
@@ -10,6 +8,8 @@
 	   #:class-format-error
 
 	   ;; constant pool
+	   #:make-constant-pool
+
 	   #:utf8-info
 	   #:make-utf8-info
 	   #:utf8-info-text
@@ -115,6 +115,8 @@
 
 	   ;; attributes
 	   #:attribute
+	   #:attribute-name
+	   #:code
 	   #:constant-value
 	   #:stack-map-table
 	   #:exceptions
@@ -189,7 +191,10 @@
 	   #:value
 	   #:version
 
+	   ;; bytecode
+	   #:instruction-length
+
 	   ;; top level
-	   #:java-class-bytes
+	   #:assemble-jclass
 	   #:disassemble-jclass
 	   #:disassemble-file))
